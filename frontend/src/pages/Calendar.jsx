@@ -674,7 +674,7 @@ export default function Calendar() {
         )}
 
         {/* 4. TIMELINE VIEWS (Day, Week, or Month) */}
-        <div ref={calendarGridRef}>
+        <div ref={calendarGridRef} id="calendar-timeline-section">
         {/* VIEW MODE 1: DAY TIMELINE */}
         {viewMode === 'Day' && (
           <div className="timeline-card">

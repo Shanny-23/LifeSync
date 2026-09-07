@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import StreakBreakdownModal from './StreakBreakdownModal';
+import StudyTargetPlanModal from './StudyTargetPlanModal';
 import { getFocusStats } from '../api/client';
 import gsap, { prefersReducedMotion } from '../lib/gsap';
 
@@ -13,6 +14,16 @@ export default function AtAGlanceMetrics({
   const streakRef = useRef(null);
   const [focusStats, setFocusStats] = useState(null);
   const [isStreakModalOpen, setIsStreakModalOpen] = useState(false);
+  const [isStudyPlanModalOpen, setIsStudyPlanModalOpen] = useState(false);
+
+  const [weeklyGoal, setWeeklyGoal] = useState(() => {
+    try {
+      const saved = localStorage.getItem('lifesync_weekly_study_goal');
+      return saved ? parseFloat(saved) : 6.0;
+    } catch {
+      return 6.0;
+    }
+  });
 
   const fetchStats = useCallback(async () => {
     try {
@@ -150,7 +161,7 @@ export default function AtAGlanceMetrics({
         {/* Metric 4: Academic Focus & Weekly Study Target */}
         <div
           className="metric-card"
-          onClick={() => navigate('/calendar')}
+          onClick={() => setIsStudyPlanModalOpen(true)}
           style={{ cursor: 'pointer', transition: 'all 0.2s ease' }}
           title="Click to view weekly study schedule and focus blocks"
         >
@@ -160,19 +171,28 @@ export default function AtAGlanceMetrics({
           </div>
           <div className="metric-content">
             <span className="metric-number">
-              {focusStats?.today_focus_minutes ? `${(focusStats.today_focus_minutes / 60 + 2.5).toFixed(1)}h` : '4.5h'}
+              {focusStats?.today_focus_minutes ? `${(focusStats.today_focus_minutes / 60 + 2.5).toFixed(1)}h` : '7.8h'}
             </span>
-            <span className="metric-subtext">/ 6.0h weekly goal</span>
+            <span className="metric-subtext">/ {weeklyGoal.toFixed(1)}h weekly goal</span>
           </div>
           <div className="metric-progress-bar">
             <div
               className="metric-progress-fill"
-              style={{ width: '75%', background: 'linear-gradient(90deg, #14382A, #1F5C3D)' }}
+              style={{
+                width: `${Math.min(100, Math.round(((focusStats?.today_focus_minutes ? focusStats.today_focus_minutes / 60 + 2.5 : 7.8) / weeklyGoal) * 100))}%`,
+                background: 'linear-gradient(90deg, #14382A, #1F5C3D)',
+              }}
             />
           </div>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '6px', fontSize: '0.68rem' }}>
-            <span style={{ color: '#64748B' }}>2 study blocks today</span>
-            <span style={{ color: '#1F5C3D', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '3px' }}>
+            <span style={{ color: '#64748B' }}>3 study blocks today</span>
+            <span
+              style={{ color: '#1F5C3D', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '3px', cursor: 'pointer' }}
+              onClick={(e) => {
+                e.stopPropagation();
+                setIsStudyPlanModalOpen(true);
+              }}
+            >
               <span>Open Plan</span> <span>→</span>
             </span>
           </div>
@@ -183,6 +203,14 @@ export default function AtAGlanceMetrics({
       <StreakBreakdownModal
         isOpen={isStreakModalOpen}
         onClose={() => setIsStreakModalOpen(false)}
+      />
+
+      {/* Study Target & Weekly Plan Modal */}
+      <StudyTargetPlanModal
+        isOpen={isStudyPlanModalOpen}
+        onClose={() => setIsStudyPlanModalOpen(false)}
+        currentFocusMinutes={focusStats?.today_focus_minutes ? focusStats.today_focus_minutes + 150 : 468}
+        initialWeeklyGoal={weeklyGoal}
       />
     </div>
   );
