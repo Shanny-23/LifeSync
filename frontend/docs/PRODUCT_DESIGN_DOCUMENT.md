@@ -83,13 +83,14 @@ This document describes the current UI design as reflected in the Figma file: wh
   - Peak Cognitive Window tip: a personalized, AI-derived suggestion for when to schedule demanding work tomorrow.
 
 ### 3.3 Dashboard
-- **Purpose**: a work-oriented, denser view than Home — brings in collaboration (teammates, meetings) and a queued list of the day's focus tasks in priority order, alongside the same core metrics.
+- **Purpose**: a work-oriented, high-focus view — brings in an interactive Pomodoro study timer, a semester course syllabus & exam mastery tracker, and a queued list of the day's focus tasks in priority order.
 - **Key sections**:
   - Same At a Glance metric family as Home, plus a persistent live time-tracker card in the top row.
   - Month/week date strip identical in pattern to Home's weekly schedule.
-  - Today's Schedule & Routine: a short list combining a habit (Yoga) and a meeting, each with its own status treatment.
-  - Team Collaboration panel: teammates with live activity status ("In Design Pod", "Researching", "Writing Draft") and colored presence dots.
-  - Escalated deadline card: same visual pattern as Home's, here marked overdue with a countdown and an "Upload PDF" action tied to the milestone list.
+  - Today's Schedule & Routine: a clean breakdown combining habits (Morning Yoga) and dedicated spaced repetition study blocks.
+  - Focus & Study Mode: live interactive Pomodoro timer (25m Focus, 5m Break, 50m Deep Work) with live progress bar and session tracker tied to highest-priority coursework.
+  - Syllabus & Exam Mastery: course-by-course syllabus coverage bars, upcoming CAT/FAT exam countdowns, and instant 1-click spaced repetition review generators.
+  - Escalated deadline card: same visual pattern as Home's, here marked with real-time urgency and an action tied to the milestone list.
   - Daily Focus Queue: an ordered list of upcoming focus tasks with per-task time estimates and queue-position labels (Next up / Standby / Queued), plus a running total and "Add Focus Task."
 
 ### 3.4 Calendar & Daily Schedule
@@ -97,8 +98,8 @@ This document describes the current UI design as reflected in the Figma file: wh
 - **Key sections**:
   - Header: Day / Week / Month view toggle, term label, active-slot count, "auto-synced with Canvas" indicator, Filter and Quick Event actions.
   - Metric row: Deadlines Tracker, Daily Routine, Study Momentum, and a live Focus Session timer.
-  - Day timeline (the centerpiece): time-stamped rows from morning through evening, each rendering a different entity type distinctly — free/unscheduled buffer time, a completed routine block, a transit/logistics note, an escalated overdue-assignment block with a live "now" marker and subtask checklist, a break interval, a meeting block with a video-call action and attendee avatars, and a distinctly styled suggested focus block awaiting user acceptance.
-  - Right rail: a standard month mini-calendar, a "Next 48 Hours" look-ahead list, and a Connected Calendars panel listing external sources (University Canvas, Google Workspace, Personal & Habits) each with a color and an on/off toggle.
+  - Day timeline (the centerpiece): time-stamped rows from morning through evening, each rendering a different entity type distinctly — free/unscheduled buffer time, a completed routine block, a transit/logistics note, an escalated overdue-assignment block with a live "now" marker and subtask checklist, a break interval, a spaced-repetition study block, and a distinctly styled suggested focus block awaiting user acceptance.
+  - Right rail: a standard month mini-calendar, a "Next 48 Hours" look-ahead list (academic deadlines, study sessions, and lab prep), and a Connected Calendars panel listing external sources (University Canvas, Google Workspace, Personal & Habits) each with a color and an on/off toggle.
 
 ---
 
@@ -112,5 +113,6 @@ This document describes the current UI design as reflected in the Figma file: wh
 | Due-today / overdue deadline card | `tasks` + `scheduled_slots` | Filtered by deadline proximity, renders subtask checklist |
 | Week strip / day timeline blocks | `events` (fixed) + `scheduled_slots` | REST API: `GET /api/schedule` and `GET /api/events` |
 | Suggested Focus Block + Accept Slot | Output of AI scheduler (`proposed`) | Primary UI action calling `POST /api/schedule/generate` or committing slot |
+| Focus & Study Timer | Active task & Local storage | Pomodoro countdown (25/5/50m), audio chime, streak tracking |
+| Syllabus & Exam Mastery | Course syllabus & `tasks` table | Syllabus progress %, CAT/FAT countdowns & spaced-repetition exam planner |
 | Connected Calendars | `source_upload_id` / source type | Canvas, Google Workspace, Personal sources |
-| Team Collaboration panel | Collaborative presence | Teammate activity avatars & status badges |

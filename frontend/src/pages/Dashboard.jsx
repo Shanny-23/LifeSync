@@ -5,7 +5,8 @@ import EscalatedDeadlineCard from '../components/EscalatedDeadlineCard';
 import RightRail from '../components/RightRail';
 import NewTaskModal from '../components/NewTaskModal';
 import TaskDetailModal from '../components/TaskDetailModal';
-import MeetingModal from '../components/MeetingModal';
+import FocusTimerWidget from '../components/FocusTimerWidget';
+import SyllabusMasteryCard from '../components/SyllabusMasteryCard';
 import { getTasks, recalculatePriorities } from '../api';
 import { useToast } from '../context/ToastContext';
 
@@ -20,7 +21,6 @@ export default function Dashboard() {
   // Modals
   const [isFocusModalOpen, setIsFocusModalOpen] = useState(false);
   const [selectedTask, setSelectedTask] = useState(null);
-  const [isMeetingModalOpen, setIsMeetingModalOpen] = useState(false);
 
   // Daily focus queue
   const [focusQueue, setFocusQueue] = useState([
@@ -308,77 +308,36 @@ export default function Dashboard() {
 
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 12px', background: '#EFF6FF', borderRadius: '8px', borderLeft: '4px solid #2563EB' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                <span>👥</span>
+                <span>🎯</span>
                 <div>
-                  <div style={{ fontSize: '0.84rem', fontWeight: 700 }}>Meeting with Team • CS101 Paper Sync</div>
-                  <div style={{ fontSize: '0.72rem', color: '#1E40AF' }}>1:00 PM - 1:45 PM • Google Meet</div>
+                  <div style={{ fontSize: '0.84rem', fontWeight: 700 }}>Study Session • CS101 Algorithm Analysis</div>
+                  <div style={{ fontSize: '0.72rem', color: '#1E40AF' }}>1:00 PM - 1:45 PM • Spaced Repetition Block</div>
                 </div>
               </div>
               <button
                 type="button"
                 className="btn btn-secondary btn-sm"
-                onClick={() => setIsMeetingModalOpen(true)}
+                onClick={() => {
+                  if (highestPriorityTask) setSelectedTask(highestPriorityTask);
+                  else toast.info('Starting study session: CS101 Algorithm Analysis');
+                }}
               >
-                Join Meet →
+                Inspect Block →
               </button>
             </div>
           </div>
         </div>
 
-        {/* 5. Team Collaboration Panel */}
-        <div className="collab-card">
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-            <span className="rail-widget-title" style={{ margin: 0 }}>Team Collaboration</span>
-            <span className="pill-eyebrow neutral">3 Teammates Active</span>
-          </div>
+        {/* 5. Focus & Study Timer Mode (Replaces Team Collaboration) */}
+        <FocusTimerWidget
+          activeTask={highestPriorityTask}
+          onSessionComplete={(mode) => toast.success(`Great job completing your ${mode} session!`)}
+        />
 
-          <div className="teammates-grid">
-            <div
-              className="teammate-item"
-              onClick={() => toast.info('Alex Lin is online and active in Design Pod.')}
-              style={{ cursor: 'pointer' }}
-            >
-              <div className="teammate-avatar" style={{ background: '#3B82F6', color: '#FFFFFF' }}>
-                AL
-                <span className="presence-dot" style={{ background: '#10B981' }} />
-              </div>
-              <div>
-                <div style={{ fontSize: '0.8rem', fontWeight: 700 }}>Alex Lin</div>
-                <div className="teammate-status">In Design Pod</div>
-              </div>
-            </div>
-
-            <div
-              className="teammate-item"
-              onClick={() => toast.info('Edwin Vance is researching literature papers.')}
-              style={{ cursor: 'pointer' }}
-            >
-              <div className="teammate-avatar" style={{ background: '#8B5CF6', color: '#FFFFFF' }}>
-                ED
-                <span className="presence-dot" style={{ background: '#10B981' }} />
-              </div>
-              <div>
-                <div style={{ fontSize: '0.8rem', fontWeight: 700 }}>Edwin Vance</div>
-                <div className="teammate-status">Researching</div>
-              </div>
-            </div>
-
-            <div
-              className="teammate-item"
-              onClick={() => toast.info('Sarah Rose is reviewing the introduction draft.')}
-              style={{ cursor: 'pointer' }}
-            >
-              <div className="teammate-avatar" style={{ background: '#EC4899', color: '#FFFFFF' }}>
-                SR
-                <span className="presence-dot" style={{ background: '#F59E0B' }} />
-              </div>
-              <div>
-                <div style={{ fontSize: '0.8rem', fontWeight: 700 }}>Sarah Rose</div>
-                <div className="teammate-status">Writing Draft</div>
-              </div>
-            </div>
-          </div>
-        </div>
+        {/* 6. Course Syllabus & Exam Mastery Tracker */}
+        <SyllabusMasteryCard
+          onPlanExamStudy={(course) => toast.success(`Generated 3-stage spaced repetition review for ${course.code}!`)}
+        />
 
         {/* 6. Escalated Deadline Card */}
         <EscalatedDeadlineCard
@@ -440,12 +399,6 @@ export default function Dashboard() {
         isOpen={isFocusModalOpen}
         onClose={() => setIsFocusModalOpen(false)}
         onTaskCreated={handleFocusTaskCreated}
-      />
-
-      {/* Meeting Modal */}
-      <MeetingModal
-        isOpen={isMeetingModalOpen}
-        onClose={() => setIsMeetingModalOpen(false)}
       />
 
       {/* Task Detail Modal */}

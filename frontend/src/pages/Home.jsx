@@ -4,7 +4,6 @@ import AtAGlanceMetrics from '../components/AtAGlanceMetrics';
 import WeekStrip from '../components/WeekStrip';
 import EscalatedDeadlineCard from '../components/EscalatedDeadlineCard';
 import RightRail from '../components/RightRail';
-import MeetingModal from '../components/MeetingModal';
 import TaskDetailModal from '../components/TaskDetailModal';
 import NewTaskModal from '../components/NewTaskModal';
 import { getTasks } from '../api';
@@ -20,7 +19,6 @@ export default function Home() {
   const [error, setError] = useState(null);
 
   // Modals
-  const [isMeetingModalOpen, setIsMeetingModalOpen] = useState(false);
   const [selectedTaskForModal, setSelectedTaskForModal] = useState(null);
   const [isNewTaskModalOpen, setIsNewTaskModalOpen] = useState(false);
   const [selectedDateFilter, setSelectedDateFilter] = useState(null);
@@ -132,13 +130,16 @@ export default function Home() {
 
             <div
               className="status-pill"
-              onClick={() => setIsMeetingModalOpen(true)}
+              onClick={() => {
+                toast.info('Opening Focus & Study Timer on Dashboard...');
+                navigate('/dashboard');
+              }}
               style={{ cursor: 'pointer', transition: 'all 0.15s ease' }}
-              title="Click to open meeting details"
+              title="Click to jump to Focus Timer on Dashboard"
               role="button"
               tabIndex={0}
             >
-              <span>👥</span> Meet: CS101 Paper @ 1:00 PM
+              <span>⏱️</span> Focus Mode: 25m Ready
             </div>
           </div>
         </section>
@@ -266,11 +267,6 @@ export default function Home() {
       <RightRail onTaskSelect={(task) => setSelectedTaskForModal(task)} />
 
       {/* Modals */}
-      <MeetingModal
-        isOpen={isMeetingModalOpen}
-        onClose={() => setIsMeetingModalOpen(false)}
-      />
-
       <TaskDetailModal
         task={selectedTaskForModal}
         isOpen={Boolean(selectedTaskForModal)}

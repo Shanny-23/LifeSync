@@ -227,25 +227,25 @@ export default function RightRail({ onCalendarToggle, onTaskSelect, onDateSelect
             onClick={() =>
               handleLookaheadClick({
                 id: 993,
-                title: 'Product Strategy Sync',
-                task: 'Product Strategy Sync',
-                category: 'Design Pod',
-                subject: 'Design Pod',
+                title: 'CS101 Algorithm Lab Prep',
+                task: 'CS101 Algorithm Lab Prep',
+                category: 'CS101',
+                subject: 'CS101',
                 urgency: 'medium',
-                priority_score: 55,
+                priority_score: 60,
                 deadline: 'Tomorrow, 2:30 PM',
-                weightage: 'Team',
-                description: 'Cross-functional sync with 4 team members on sprint objectives, user testing results, and design milestones.',
+                weightage: '25%',
+                description: 'Hands-on practice: Balanced BST rotations, AVL tree balancing, and recursive graph traversal implementations.',
               })
             }
             style={{ cursor: 'pointer', transition: 'transform 0.15s ease' }}
             title="Click to inspect task"
           >
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-              <span className="lookahead-title">Product Strategy Sync</span>
-              <span className="pill-eyebrow amber">Meeting</span>
+              <span className="lookahead-title">CS101 Algorithm Lab Prep</span>
+              <span className="pill-eyebrow forest">Lab Prep</span>
             </div>
-            <div className="lookahead-time">Tomorrow, 2:30 PM • 4 Attendees</div>
+            <div className="lookahead-time">Tomorrow, 2:30 PM • 25% Weightage</div>
           </div>
         </div>
       </div>

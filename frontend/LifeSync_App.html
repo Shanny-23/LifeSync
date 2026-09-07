@@ -737,45 +737,53 @@
                       <div style={{ fontSize: '0.72rem', color: '#2563EB' }}>2:30 PM - 3:15 PM • Google Meet</div>
                     </div>
                   </div>
-                  <button className="btn btn-secondary btn-sm" onClick={() => alert("Opening Google Meet...")}>Join Meet →</button>
+                  <button className="btn btn-secondary btn-sm" onClick={() => alert("Starting Spaced Repetition Focus Session...")}>Start Focus →</button>
                 </div>
               </div>
             </div>
 
-            {/* Team Collaboration */}
-            <div className="rail-widget">
-              <span className="rail-widget-title">Team Collaboration</span>
-              <div className="teammates-grid">
-                <div className="teammate-item">
-                  <div className="teammate-avatar" style={{ background: '#3B82F6', color: '#FFF' }}>
-                    AL
-                    <span className="presence-dot" />
+            {/* Focus & Study Mode (Replaces Team Collaboration) */}
+            <div className="rail-widget" style={{ background: 'linear-gradient(180deg, #FFFFFF 0%, #F8FAF9 100%)', border: '1px solid #E5E7EB', borderRadius: '12px', padding: '16px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>
+                <span className="rail-widget-title" style={{ margin: 0 }}>🔥 Focus & Study Mode</span>
+                <span className="pill-eyebrow green">🍅 3 Sessions</span>
+              </div>
+              <div style={{ textAlign: 'center', padding: '10px 0' }}>
+                <div style={{ fontSize: '2.4rem', fontWeight: 800, fontFamily: 'monospace', color: '#1B3B2E' }}>25:00</div>
+                <div style={{ fontSize: '0.76rem', color: '#6B7280', marginTop: '4px' }}>Target: CS101 Term Paper Final • Literature Review</div>
+              </div>
+              <div style={{ display: 'flex', gap: '8px', marginTop: '8px' }}>
+                <button className="btn btn-primary btn-sm" style={{ flex: 2 }} onClick={() => alert("Pomodoro focus timer started!")}>▶ Start Focus</button>
+                <button className="btn btn-secondary btn-sm" style={{ flex: 1 }} onClick={() => alert("Focus timer reset to 25:00")}>Reset</button>
+              </div>
+            </div>
+
+            {/* Syllabus & Exam Mastery */}
+            <div className="rail-widget" style={{ border: '1px solid #E5E7EB', borderRadius: '12px', padding: '16px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>
+                <span className="rail-widget-title" style={{ margin: 0 }}>Syllabus & Exam Mastery</span>
+                <span className="pill-eyebrow forest">Fall 2026</span>
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                <div style={{ background: '#F9FAFB', padding: '8px 10px', borderRadius: '8px', border: '1px solid #E5E7EB' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.78rem', fontWeight: 700 }}>
+                    <span>CS101: Data Structures</span>
+                    <span style={{ color: '#059669' }}>82%</span>
                   </div>
-                  <div>
-                    <strong style={{ fontSize: '0.8rem' }}>Alex Lin</strong>
-                    <div style={{ fontSize: '0.7rem', color: '#6B7280' }}>In Design Pod</div>
+                  <div style={{ fontSize: '0.7rem', color: '#6B7280', margin: '3px 0' }}>CAT-1 in 4 days</div>
+                  <div style={{ width: '100%', height: '6px', background: '#E5E7EB', borderRadius: '9999px', overflow: 'hidden' }}>
+                    <div style={{ width: '82%', height: '100%', background: '#2563EB', borderRadius: '9999px' }} />
                   </div>
                 </div>
 
-                <div className="teammate-item">
-                  <div className="teammate-avatar" style={{ background: '#8B5CF6', color: '#FFF' }}>
-                    ED
-                    <span className="presence-dot" />
+                <div style={{ background: '#F9FAFB', padding: '8px 10px', borderRadius: '8px', border: '1px solid #E5E7EB' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.78rem', fontWeight: 700 }}>
+                    <span>MATH204: Linear Algebra</span>
+                    <span style={{ color: '#D97706' }}>64%</span>
                   </div>
-                  <div>
-                    <strong style={{ fontSize: '0.8rem' }}>Edwin Vance</strong>
-                    <div style={{ fontSize: '0.7rem', color: '#6B7280' }}>Researching</div>
-                  </div>
-                </div>
-
-                <div className="teammate-item">
-                  <div className="teammate-avatar" style={{ background: '#EC4899', color: '#FFF' }}>
-                    SR
-                    <span className="presence-dot" style={{ background: '#F59E0B' }} />
-                  </div>
-                  <div>
-                    <strong style={{ fontSize: '0.8rem' }}>Sarah Rose</strong>
-                    <div style={{ fontSize: '0.7rem', color: '#6B7280' }}>Writing Draft</div>
+                  <div style={{ fontSize: '0.7rem', color: '#6B7280', margin: '3px 0' }}>Midterm in 8 days</div>
+                  <div style={{ width: '100%', height: '6px', background: '#E5E7EB', borderRadius: '9999px', overflow: 'hidden' }}>
+                    <div style={{ width: '64%', height: '100%', background: '#7C3AED', borderRadius: '9999px' }} />
                   </div>
                 </div>
               </div>

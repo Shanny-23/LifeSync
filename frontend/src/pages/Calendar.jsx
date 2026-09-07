@@ -2,7 +2,6 @@ import { useState, useEffect, useCallback } from 'react';
 import { startOfWeek, endOfWeek, addDays, format } from 'date-fns';
 import AtAGlanceMetrics from '../components/AtAGlanceMetrics';
 import RightRail from '../components/RightRail';
-import MeetingModal from '../components/MeetingModal';
 import TaskDetailModal from '../components/TaskDetailModal';
 import { getSchedule, generateSchedule, resolveConflicts, getEvents } from '../api';
 import { useToast } from '../context/ToastContext';
@@ -16,7 +15,6 @@ export default function Calendar() {
   const [actionMessage, setActionMessage] = useState(null);
   const [isProcessingAI, setIsProcessingAI] = useState(false);
   const [suggestedSlotAccepted, setSuggestedSlotAccepted] = useState(false);
-  const [isMeetingModalOpen, setIsMeetingModalOpen] = useState(false);
   const [selectedTask, setSelectedTask] = useState(null);
   const toast = useToast();
 
@@ -463,28 +461,38 @@ export default function Calendar() {
                       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                         <div>
                           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-                            <span className="pill-eyebrow" style={{ background: '#DBEAFE', color: '#1D4ED8' }}>
-                              MEETING
+                            <span className="pill-eyebrow forest" style={{ background: '#DCFCE7', color: '#166534' }}>
+                              STUDY BLOCK
                             </span>
                             <span className="pill-eyebrow" style={{ background: '#E0F2FE', color: '#0369A1', fontSize: '0.65rem', border: '1px solid #BAE6FD' }}>
-                              📅 Synced with Google
+                              🧠 Spaced Repetition
                             </span>
-                            <strong style={{ fontSize: '0.92rem', color: '#1E40AF' }}>
-                              Product Strategy Review & Roadmap
+                            <strong style={{ fontSize: '0.92rem', color: '#1B3B2E' }}>
+                              Math 204 Midterm Review & Problem Set
                             </strong>
                           </div>
-                          <div style={{ fontSize: '0.74rem', color: '#3B82F6', marginTop: '4px' }}>
-                            01:30 PM – 02:45 PM • Design System alignment & sprint goals
+                          <div style={{ fontSize: '0.74rem', color: '#4B5563', marginTop: '4px' }}>
+                            01:30 PM – 02:45 PM • Linear transformations & eigenvalues practice
                           </div>
                         </div>
 
                         <button
                           type="button"
-                          className="btn btn-primary btn-sm"
-                          style={{ background: '#2563EB' }}
-                          onClick={() => setIsMeetingModalOpen(true)}
+                          className="btn btn-secondary btn-sm"
+                          onClick={() => {
+                            setSelectedTask({
+                              id: 994,
+                              title: 'Math 204 Midterm Review & Problem Set',
+                              task: 'Math 204 Midterm Review & Problem Set',
+                              category: 'MATH204',
+                              subject: 'MATH204',
+                              priority_score: 75,
+                              deadline: 'Tomorrow, 10:00 AM',
+                              description: 'Spaced repetition study block focused on diagonalization, rank-nullity theorem, and past exam questions.',
+                            });
+                          }}
                         >
-                          📹 Join Meet
+                          ⚡ Inspect Block
                         </button>
                       </div>
                     </div>
@@ -549,12 +557,6 @@ export default function Calendar() {
 
       {/* Right Rail Contextual Info */}
       <RightRail onTaskSelect={(t) => setSelectedTask(t)} />
-
-      {/* Meeting Modal */}
-      <MeetingModal
-        isOpen={isMeetingModalOpen}
-        onClose={() => setIsMeetingModalOpen(false)}
-      />
 
       {/* Task Detail Modal */}
       <TaskDetailModal
