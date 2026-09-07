@@ -21,35 +21,55 @@ export default function StudyTargetPlanModal({
     }
   });
 
-  const [studyBlocks, setStudyBlocks] = useState([
-    {
-      id: 1,
-      title: 'Data Structures & Dynamic Programming',
-      type: 'deep_work',
-      duration: '45m',
-      time: '10:00 – 10:45 AM',
-      status: 'completed',
-      subject: 'CS201',
-    },
-    {
-      id: 2,
-      title: 'Probability & Markov Chains (Active Recall)',
-      type: 'spaced_review',
-      duration: '20m',
-      time: '02:00 – 02:20 PM',
-      status: 'active',
-      subject: 'Math 204',
-    },
-    {
-      id: 3,
-      title: 'OS Process Concurrency & Semaphores',
-      type: 'deep_work',
-      duration: '60m',
-      time: '04:30 – 05:30 PM',
-      status: 'upcoming',
-      subject: 'CS304',
-    },
-  ]);
+  const [customGoalInput, setCustomGoalInput] = useState(weeklyGoal.toString());
+
+  // Keep custom input synchronized with weeklyGoal
+  useEffect(() => {
+    setCustomGoalInput(weeklyGoal.toString());
+  }, [weeklyGoal]);
+
+  const [studyBlocks, setStudyBlocks] = useState(() => {
+    try {
+      const saved = localStorage.getItem('lifesync_daily_study_blocks');
+      if (saved) return JSON.parse(saved);
+    } catch {}
+    return [
+      {
+        id: 1,
+        title: 'Data Structures & Dynamic Programming',
+        type: 'deep_work',
+        duration: '45m',
+        time: '10:00 – 10:45 AM',
+        status: 'completed',
+        subject: 'CS201',
+      },
+      {
+        id: 2,
+        title: 'Probability & Markov Chains (Active Recall)',
+        type: 'spaced_review',
+        duration: '20m',
+        time: '02:00 – 02:20 PM',
+        status: 'active',
+        subject: 'Math 204',
+      },
+      {
+        id: 3,
+        title: 'OS Process Concurrency & Semaphores',
+        type: 'deep_work',
+        duration: '60m',
+        time: '04:30 – 05:30 PM',
+        status: 'upcoming',
+        subject: 'CS304',
+      },
+    ];
+  });
+
+  // Custom block creation form state
+  const [isAddingBlock, setIsAddingBlock] = useState(false);
+  const [newBlockSubject, setNewBlockSubject] = useState('');
+  const [newBlockTitle, setNewBlockTitle] = useState('');
+  const [newBlockDuration, setNewBlockDuration] = useState('45m');
+  const [newBlockTime, setNewBlockTime] = useState('06:00 – 06:45 PM');
 
   // Keyboard shortcut listener
   useEffect(() => {
@@ -63,17 +83,69 @@ export default function StudyTargetPlanModal({
 
   if (!isOpen) return null;
 
-  const currentHours = (currentFocusMinutes / 60);
+  const currentHours = currentFocusMinutes / 60;
   const progressPercent = Math.min(100, Math.round((currentHours / (weeklyGoal || 1)) * 100));
   const isOverGoal = currentHours >= weeklyGoal;
 
   const handleGoalChange = (newGoal) => {
-    setWeeklyGoal(newGoal);
+    const num = parseFloat(newGoal);
+    if (isNaN(num) || num <= 0) return;
+    setWeeklyGoal(num);
+    setCustomGoalInput(num.toString());
     try {
-      localStorage.setItem('lifesync_weekly_study_goal', String(newGoal));
+      localStorage.setItem('lifesync_weekly_study_goal', String(num));
     } catch {}
-    toast.success(`Weekly study target updated to ${newGoal.toFixed(1)} hours!`);
+    toast.success(`Weekly study target updated to ${num.toFixed(1)} hours!`);
     window.dispatchEvent(new CustomEvent('lifesync:focus-completed'));
+  };
+
+  const handleCustomInputSubmit = (e) => {
+    e.preventDefault();
+    const val = parseFloat(customGoalInput);
+    if (!isNaN(val) && val > 0 && val <= 100) {
+      handleGoalChange(val);
+    } else {
+      toast.error('Please enter a target between 0.5 and 100 hours');
+    }
+  };
+
+  const handleStepGoal = (delta) => {
+    const next = Math.max(0.5, Math.min(100, parseFloat((weeklyGoal + delta).toFixed(1))));
+    handleGoalChange(next);
+  };
+
+  const saveStudyBlocks = (updated) => {
+    setStudyBlocks(updated);
+    try {
+      localStorage.setItem('lifesync_daily_study_blocks', JSON.stringify(updated));
+    } catch {}
+  };
+
+  const handleCreateCustomBlock = (e) => {
+    e.preventDefault();
+    if (!newBlockTitle.trim()) {
+      toast.error('Please enter a topic title for the focus block');
+      return;
+    }
+    const newBlock = {
+      id: Date.now(),
+      title: newBlockTitle.trim(),
+      subject: (newBlockSubject.trim() || 'General').toUpperCase(),
+      duration: newBlockDuration,
+      time: newBlockTime.trim() || 'Flexible Time',
+      type: newBlockDuration === '20m' ? 'spaced_review' : 'deep_work',
+      status: 'upcoming',
+    };
+    saveStudyBlocks([...studyBlocks, newBlock]);
+    setNewBlockTitle('');
+    setNewBlockSubject('');
+    setIsAddingBlock(false);
+    toast.success(`⚡ Added focus block: "${newBlock.title}"`);
+  };
+
+  const handleDeleteBlock = (id) => {
+    saveStudyBlocks(studyBlocks.filter((b) => b.id !== id));
+    toast.info('Study block removed.');
   };
 
   const handleStartBlock = async (block) => {
@@ -84,9 +156,10 @@ export default function StudyTargetPlanModal({
         target_name: block.title,
       });
       toast.success(`⚡ Focus session logged for "${block.title}" (+25 XP)!`);
-      setStudyBlocks((prev) =>
-        prev.map((b) => (b.id === block.id ? { ...b, status: 'completed' } : b))
+      const updated = studyBlocks.map((b) =>
+        b.id === block.id ? { ...b, status: 'completed' } : b
       );
+      saveStudyBlocks(updated);
       window.dispatchEvent(new CustomEvent('lifesync:focus-completed'));
     } catch {
       toast.info(`Starting focus session for: ${block.title}`);
@@ -118,7 +191,7 @@ export default function StudyTargetPlanModal({
       <div
         className="modal-card"
         style={{
-          maxWidth: '560px',
+          maxWidth: '580px',
           borderRadius: '16px',
           overflow: 'hidden',
           boxShadow: '0 20px 40px rgba(0,0,0,0.18)',
@@ -191,7 +264,7 @@ export default function StudyTargetPlanModal({
 
         {/* Modal Body */}
         <div style={{ padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: '18px' }}>
-          {/* 1. Progress Banner */}
+          {/* 1. Progress Banner with Stepper & Input */}
           <div
             style={{
               background: '#F0FDF4',
@@ -200,12 +273,12 @@ export default function StudyTargetPlanModal({
               padding: '16px 18px',
             }}
           >
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: '8px' }}>
-              <div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: '8px', flexWrap: 'wrap', gap: '6px' }}>
+              <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px', flexWrap: 'wrap' }}>
                 <span style={{ fontSize: '2.2rem', fontWeight: 900, color: '#14382A', fontFamily: 'monospace' }}>
                   {currentHours.toFixed(1)}h
                 </span>
-                <span style={{ fontSize: '0.9rem', color: '#166534', marginLeft: '8px', fontWeight: 600 }}>
+                <span style={{ fontSize: '0.9rem', color: '#166534', fontWeight: 600 }}>
                   / {weeklyGoal.toFixed(1)}h weekly target
                 </span>
               </div>
@@ -229,34 +302,110 @@ export default function StudyTargetPlanModal({
               />
             </div>
 
-            {/* Goal Selector Chips */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '12px', flexWrap: 'wrap' }}>
-              <span style={{ fontSize: '0.72rem', color: '#166534', fontWeight: 700 }}>
-                Adjust Target:
-              </span>
-              {[4.0, 6.0, 8.0, 10.0, 12.0].map((goal) => {
-                const isSelected = weeklyGoal === goal;
-                return (
+            {/* Goal Adjustment Controls: Quick Chips + Direct Custom Input */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginTop: '12px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+                <span style={{ fontSize: '0.72rem', color: '#166534', fontWeight: 700 }}>
+                  Preset Targets:
+                </span>
+                {[4.0, 6.0, 8.0, 10.0, 12.0].map((goal) => {
+                  const isSelected = weeklyGoal === goal;
+                  return (
+                    <button
+                      key={goal}
+                      type="button"
+                      onClick={() => handleGoalChange(goal)}
+                      style={{
+                        background: isSelected ? '#15803D' : '#FFFFFF',
+                        color: isSelected ? '#FFFFFF' : '#166534',
+                        border: `1px solid ${isSelected ? '#15803D' : '#86EFAC'}`,
+                        padding: '2px 8px',
+                        borderRadius: '12px',
+                        fontSize: '0.72rem',
+                        fontWeight: 700,
+                        cursor: 'pointer',
+                        transition: 'all 0.15s ease',
+                      }}
+                    >
+                      {goal.toFixed(1)}h
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* Direct Custom Number Input & Stepper */}
+              <form
+                onSubmit={handleCustomInputSubmit}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                  background: '#FFFFFF',
+                  padding: '6px 12px',
+                  borderRadius: '10px',
+                  border: '1px solid #86EFAC',
+                  width: 'fit-content',
+                  flexWrap: 'wrap',
+                }}
+              >
+                <span style={{ fontSize: '0.74rem', color: '#166534', fontWeight: 700 }}>
+                  Enter Custom Target:
+                </span>
+
+                <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
                   <button
-                    key={goal}
                     type="button"
-                    onClick={() => handleGoalChange(goal)}
-                    style={{
-                      background: isSelected ? '#15803D' : '#FFFFFF',
-                      color: isSelected ? '#FFFFFF' : '#166534',
-                      border: `1px solid ${isSelected ? '#15803D' : '#86EFAC'}`,
-                      padding: '2px 8px',
-                      borderRadius: '12px',
-                      fontSize: '0.72rem',
-                      fontWeight: 700,
-                      cursor: 'pointer',
-                      transition: 'all 0.15s ease',
-                    }}
+                    onClick={() => handleStepGoal(-0.5)}
+                    className="btn btn-secondary btn-xs"
+                    style={{ padding: '2px 6px', fontWeight: 800, fontSize: '0.76rem' }}
+                    title="Decrease by 0.5h"
                   >
-                    {goal.toFixed(1)}h
+                    –
                   </button>
-                );
-              })}
+
+                  <input
+                    type="number"
+                    step="0.5"
+                    min="0.5"
+                    max="100"
+                    aria-label="Custom weekly study target in hours"
+                    value={customGoalInput}
+                    onChange={(e) => setCustomGoalInput(e.target.value)}
+                    style={{
+                      width: '68px',
+                      padding: '4px 6px',
+                      borderRadius: '6px',
+                      border: '1px solid #86EFAC',
+                      fontSize: '0.84rem',
+                      fontWeight: 800,
+                      color: '#14382A',
+                      textAlign: 'center',
+                      background: '#F0FDF4',
+                    }}
+                    placeholder="e.g. 15"
+                  />
+
+                  <button
+                    type="button"
+                    onClick={() => handleStepGoal(0.5)}
+                    className="btn btn-secondary btn-xs"
+                    style={{ padding: '2px 6px', fontWeight: 800, fontSize: '0.76rem' }}
+                    title="Increase by 0.5h"
+                  >
+                    +
+                  </button>
+                </div>
+
+                <span style={{ fontSize: '0.74rem', color: '#166534', fontWeight: 600 }}>hrs/wk</span>
+
+                <button
+                  type="submit"
+                  className="btn btn-forest btn-xs"
+                  style={{ padding: '4px 10px', fontSize: '0.72rem', fontWeight: 700 }}
+                >
+                  Set Target
+                </button>
+              </form>
             </div>
           </div>
 
@@ -266,11 +415,89 @@ export default function StudyTargetPlanModal({
               <span style={{ fontSize: '0.84rem', fontWeight: 800, color: '#0F172A', textTransform: 'uppercase' }}>
                 Today's Focus Blocks ({studyBlocks.length})
               </span>
-              <span style={{ fontSize: '0.74rem', color: '#64748B' }}>
-                Curated around your fixed classes
-              </span>
+              <button
+                type="button"
+                className="btn btn-secondary btn-xs"
+                onClick={() => setIsAddingBlock(!isAddingBlock)}
+                style={{
+                  fontSize: '0.72rem',
+                  fontWeight: 700,
+                  color: '#1F5C3D',
+                  borderColor: '#86EFAC',
+                  background: isAddingBlock ? '#DCFCE7' : '#FFFFFF',
+                }}
+              >
+                {isAddingBlock ? '✕ Close Form' : '+ Add Focus Block'}
+              </button>
             </div>
 
+            {/* Inline Custom Focus Block Input Form */}
+            {isAddingBlock && (
+              <form
+                onSubmit={handleCreateCustomBlock}
+                style={{
+                  background: '#F8FAFC',
+                  border: '1px dashed #94A3B8',
+                  borderRadius: '10px',
+                  padding: '12px 14px',
+                  marginBottom: '12px',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '8px',
+                }}
+              >
+                <div style={{ fontSize: '0.76rem', fontWeight: 700, color: '#1E293B' }}>
+                  Create New Study Focus Block
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: '8px' }}>
+                  <input
+                    type="text"
+                    placeholder="Subject (e.g. CS201)"
+                    value={newBlockSubject}
+                    onChange={(e) => setNewBlockSubject(e.target.value)}
+                    style={{ padding: '6px 8px', borderRadius: '6px', border: '1px solid #CBD5E1', fontSize: '0.8rem' }}
+                    required
+                  />
+                  <input
+                    type="text"
+                    placeholder="Topic Title (e.g. Graph Algorithms Review)"
+                    value={newBlockTitle}
+                    onChange={(e) => setNewBlockTitle(e.target.value)}
+                    style={{ padding: '6px 8px', borderRadius: '6px', border: '1px solid #CBD5E1', fontSize: '0.8rem' }}
+                    required
+                  />
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr auto', gap: '8px' }}>
+                  <select
+                    value={newBlockDuration}
+                    onChange={(e) => setNewBlockDuration(e.target.value)}
+                    style={{ padding: '6px 8px', borderRadius: '6px', border: '1px solid #CBD5E1', fontSize: '0.8rem', background: '#FFFFFF' }}
+                  >
+                    <option value="20m">20m (Spaced Review)</option>
+                    <option value="25m">25m (Pomodoro)</option>
+                    <option value="45m">45m (Focus Block)</option>
+                    <option value="60m">60m (Deep Work)</option>
+                    <option value="90m">90m (Extended Study)</option>
+                  </select>
+                  <input
+                    type="text"
+                    placeholder="Time slot (e.g. 06:00 – 07:00 PM)"
+                    value={newBlockTime}
+                    onChange={(e) => setNewBlockTime(e.target.value)}
+                    style={{ padding: '6px 8px', borderRadius: '6px', border: '1px solid #CBD5E1', fontSize: '0.8rem' }}
+                  />
+                  <button
+                    type="submit"
+                    className="btn btn-forest btn-sm"
+                    style={{ padding: '6px 14px', fontSize: '0.78rem', whiteSpace: 'nowrap', fontWeight: 700 }}
+                  >
+                    + Add Block
+                  </button>
+                </div>
+              </form>
+            )}
+
+            {/* List of Study Blocks */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
               {studyBlocks.map((block) => {
                 const isDone = block.status === 'completed';
@@ -321,25 +548,46 @@ export default function StudyTargetPlanModal({
                       </div>
                     </div>
 
-                    <button
-                      type="button"
-                      className="btn btn-sm"
-                      style={{
-                        padding: '4px 10px',
-                        fontSize: '0.74rem',
-                        fontWeight: 700,
-                        background: isDone ? '#F1F5F9' : isActive ? '#D97706' : '#1F5C3D',
-                        color: isDone ? '#94A3B8' : '#FFFFFF',
-                        border: 'none',
-                        borderRadius: '6px',
-                        cursor: isDone ? 'default' : 'pointer',
-                        whiteSpace: 'nowrap',
-                      }}
-                      onClick={() => !isDone && handleStartBlock(block)}
-                      disabled={isDone}
-                    >
-                      {isDone ? '✓ Completed' : isActive ? '⚡ Start Block' : 'Start Focus'}
-                    </button>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <button
+                        type="button"
+                        className="btn btn-sm"
+                        style={{
+                          padding: '4px 10px',
+                          fontSize: '0.74rem',
+                          fontWeight: 700,
+                          background: isDone ? '#F1F5F9' : isActive ? '#D97706' : '#1F5C3D',
+                          color: isDone ? '#94A3B8' : '#FFFFFF',
+                          border: 'none',
+                          borderRadius: '6px',
+                          cursor: isDone ? 'default' : 'pointer',
+                          whiteSpace: 'nowrap',
+                        }}
+                        onClick={() => !isDone && handleStartBlock(block)}
+                        disabled={isDone}
+                      >
+                        {isDone ? '✓ Completed' : isActive ? '⚡ Start Block' : 'Start Focus'}
+                      </button>
+
+                      {/* Remove custom block button */}
+                      {block.id > 10 && (
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteBlock(block.id)}
+                          style={{
+                            background: 'transparent',
+                            border: 'none',
+                            cursor: 'pointer',
+                            color: '#94A3B8',
+                            fontSize: '0.85rem',
+                            padding: '2px 4px',
+                          }}
+                          title="Delete custom block"
+                        >
+                          ✕
+                        </button>
+                      )}
+                    </div>
                   </div>
                 );
               })}
