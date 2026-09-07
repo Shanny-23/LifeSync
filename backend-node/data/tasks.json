@@ -1,0 +1,52 @@
+[
+  {
+    "id": "task-init001",
+    "task": "CS101 Term Paper Draft",
+    "deadline": "2026-10-28 17:00",
+    "urgency": "high",
+    "scheduledSlot": "2026-10-28 10:00 - 12:30",
+    "category": "Academic",
+    "completed": false,
+    "createdAt": "2026-10-25T08:00:00.000Z"
+  },
+  {
+    "id": "task-init002",
+    "task": "Math 204 Problem Set 4",
+    "deadline": "2026-10-29 23:59",
+    "urgency": "high",
+    "scheduledSlot": "2026-10-29 14:00 - 16:00",
+    "category": "Academic",
+    "completed": false,
+    "createdAt": "2026-10-25T09:30:00.000Z"
+  },
+  {
+    "id": "task-init003",
+    "task": "Literature Review Citations",
+    "deadline": "2026-10-30 18:00",
+    "urgency": "medium",
+    "scheduledSlot": "2026-10-30 09:00 - 10:30",
+    "category": "Research",
+    "completed": false,
+    "createdAt": "2026-10-25T11:00:00.000Z"
+  },
+  {
+    "id": "task-init004",
+    "task": "Biology Lab Report",
+    "deadline": "2026-11-02 12:00",
+    "urgency": "low",
+    "scheduledSlot": "2026-11-01 11:00 - 13:00",
+    "category": "Academic",
+    "completed": false,
+    "createdAt": "2026-10-26T10:00:00.000Z"
+  },
+  {
+    "id": "task-init005",
+    "task": "Club Fest Poster Design",
+    "deadline": "2026-11-04 15:00",
+    "urgency": "low",
+    "scheduledSlot": "2026-11-03 16:00 - 17:30",
+    "category": "Campus",
+    "completed": true,
+    "createdAt": "2026-10-26T14:20:00.000Z"
+  }
+]

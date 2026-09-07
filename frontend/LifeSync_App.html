@@ -1,0 +1,1277 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>LifeSync — Intelligent Task & Calendar Optimization</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap" rel="stylesheet">
+  
+  <!-- React & Babel Standalone CDN -->
+  <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+  <style>
+    :root {
+      --color-forest: #1B3B2E;
+      --color-forest-dark: #12281F;
+      --color-forest-light: #244C3C;
+      --color-working-green: #1F5C3D;
+      --color-working-green-hover: #174930;
+      --color-pale-tint: #E7F0EA;
+      --color-alert-coral: #B23A3A;
+      --color-alert-coral-dark: #8F2828;
+      --color-coral-tint: #F6D9D3;
+      --color-amber: #D9A441;
+      --color-amber-light: #FEF3C7;
+      --color-neutral: #6B7280;
+      --color-neutral-dark: #1F2937;
+      --color-neutral-light: #E5E7EB;
+      --color-neutral-subtle: #F3F4F6;
+      --color-offwhite: #F4F5F6;
+      --color-surface: #FFFFFF;
+      --color-surface-hover: #FAFBFC;
+      --color-border: #E2E8F0;
+      --radius-sm: 6px;
+      --radius-md: 10px;
+      --radius-lg: 14px;
+      --radius-xl: 20px;
+      --radius-full: 9999px;
+      --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+      --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.08);
+      --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.08);
+      --font-sans: 'Plus Jakarta Sans', 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: var(--font-sans);
+      background-color: var(--color-offwhite);
+      color: var(--color-neutral-dark);
+      line-height: 1.5;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* Typography & Eyebrow Pills */
+    .pill-eyebrow {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      font-size: 0.68rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      padding: 3px 8px;
+      border-radius: var(--radius-full);
+      line-height: 1;
+    }
+    .pill-eyebrow.forest { background: rgba(27, 59, 46, 0.12); color: var(--color-forest); }
+    .pill-eyebrow.green { background: var(--color-pale-tint); color: var(--color-working-green); }
+    .pill-eyebrow.coral { background: var(--color-coral-tint); color: var(--color-alert-coral); }
+    .pill-eyebrow.amber { background: var(--color-amber-light); color: #B45309; }
+    .pill-eyebrow.neutral { background: var(--color-neutral-subtle); color: var(--color-neutral); }
+
+    /* Buttons */
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      font-family: var(--font-sans);
+      font-size: 0.88rem;
+      font-weight: 600;
+      padding: 8px 16px;
+      border-radius: var(--radius-md);
+      border: 1px solid transparent;
+      cursor: pointer;
+      transition: all 0.18s ease-in-out;
+      text-decoration: none;
+    }
+    .btn-primary { background: var(--color-working-green); color: #FFF; }
+    .btn-primary:hover { background: var(--color-working-green-hover); }
+    .btn-forest { background: var(--color-forest); color: #FFF; }
+    .btn-secondary { background: var(--color-surface); color: var(--color-neutral-dark); border-color: var(--color-border); }
+    .btn-coral { background: var(--color-alert-coral); color: #FFF; }
+    .btn-pale { background: var(--color-pale-tint); color: var(--color-forest); }
+    .btn-sm { padding: 5px 10px; font-size: 0.78rem; }
+    .btn-lg { padding: 12px 24px; font-size: 1.05rem; }
+
+    /* Layout Shell */
+    .workspace-shell { display: flex; min-height: 100vh; background: var(--color-offwhite); }
+    .workspace-sidebar {
+      width: 250px;
+      background: var(--color-forest);
+      color: #FFF;
+      flex-shrink: 0;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      padding: 20px 16px;
+      position: sticky;
+      top: 0;
+      height: 100vh;
+      box-shadow: 2px 0 8px rgba(0,0,0,0.08);
+      z-index: 40;
+    }
+    .sidebar-brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-weight: 800;
+      font-size: 1.25rem;
+      color: #FFF;
+      text-decoration: none;
+    }
+    .sidebar-brand-badge {
+      font-size: 0.65rem;
+      background: rgba(255, 255, 255, 0.18);
+      padding: 2px 6px;
+      border-radius: var(--radius-sm);
+    }
+    .workspace-selector {
+      margin-top: 14px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      background: rgba(0, 0, 0, 0.2);
+      padding: 7px 10px;
+      border-radius: var(--radius-md);
+      font-size: 0.78rem;
+      color: #D1D5DB;
+    }
+    .btn-quick-task {
+      width: 100%;
+      background: #FFF;
+      color: var(--color-forest);
+      font-weight: 700;
+      font-size: 0.84rem;
+      padding: 9px 12px;
+      border-radius: var(--radius-md);
+      border: none;
+      margin: 16px 0 20px 0;
+      cursor: pointer;
+    }
+    .sidebar-link {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 9px 12px;
+      border-radius: var(--radius-md);
+      color: #D1D5DB;
+      font-size: 0.88rem;
+      font-weight: 500;
+      cursor: pointer;
+      user-select: none;
+    }
+    .sidebar-link:hover { background: rgba(255,255,255,0.08); color: #FFF; }
+    .sidebar-link.active { background: var(--color-working-green); color: #FFF; font-weight: 600; }
+    .sidebar-user {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding-top: 14px;
+      border-top: 1px solid rgba(255, 255, 255, 0.1);
+    }
+    .user-avatar {
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      background: #374151;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 700;
+      color: #FFF;
+      position: relative;
+    }
+    .presence-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: #10B981;
+      position: absolute;
+      bottom: 0;
+      right: 0;
+      border: 1.5px solid var(--color-forest);
+    }
+
+    /* Main Content */
+    .workspace-main { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+    .workspace-topbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 12px 28px;
+      background: var(--color-surface);
+      border-bottom: 1px solid var(--color-border);
+      position: sticky;
+      top: 0;
+      z-index: 30;
+    }
+    .workspace-body { display: flex; gap: 24px; padding: 24px 28px; flex: 1; }
+    .workspace-primary-col { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 20px; }
+    .workspace-right-rail { width: 310px; flex-shrink: 0; display: flex; flex-direction: column; gap: 20px; }
+
+    @media (max-width: 1100px) {
+      .workspace-body { flex-direction: column; }
+      .workspace-right-rail { width: 100%; }
+    }
+
+    /* Greeting Banner */
+    .greeting-banner {
+      background: var(--color-forest);
+      color: #FFF;
+      border-radius: var(--radius-lg);
+      padding: 24px;
+      position: relative;
+      box-shadow: var(--shadow-sm);
+    }
+    .greeting-pills { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
+    .status-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: rgba(255,255,255,0.12);
+      color: #FFF;
+      font-size: 0.75rem;
+      padding: 4px 10px;
+      border-radius: var(--radius-full);
+    }
+
+    /* Metrics Row */
+    .metrics-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 16px; }
+    .metric-card {
+      background: var(--color-surface);
+      border: 1px solid var(--color-border);
+      border-radius: var(--radius-lg);
+      padding: 16px 18px;
+      box-shadow: var(--shadow-sm);
+    }
+    .metric-number { font-size: 2.1rem; font-weight: 800; line-height: 1; color: #0F172A; }
+    .metric-progress-bar { height: 6px; background: var(--color-neutral-light); border-radius: var(--radius-full); overflow: hidden; margin-top: 8px; }
+    .metric-progress-fill { height: 100%; background: var(--color-working-green); }
+
+    /* Routine Ring */
+    .ring-circle {
+      width: 44px;
+      height: 44px;
+      border-radius: 50%;
+      border: 4px solid var(--color-pale-tint);
+      border-top-color: var(--color-working-green);
+      border-right-color: var(--color-working-green);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.76rem;
+      font-weight: 700;
+      color: var(--color-forest);
+    }
+
+    /* Week Strip */
+    .week-strip-card {
+      background: var(--color-surface);
+      border: 1px solid var(--color-border);
+      border-radius: var(--radius-lg);
+      padding: 14px 18px;
+      box-shadow: var(--shadow-sm);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .week-day-pill {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      width: 44px;
+      height: 52px;
+      border-radius: var(--radius-md);
+      cursor: pointer;
+      position: relative;
+    }
+    .week-day-pill.today { background: var(--color-forest); color: #FFF; }
+    .week-day-pill.today .day-name { color: #A7F3D0; }
+    .week-day-pill .day-name { font-size: 0.68rem; font-weight: 600; text-transform: uppercase; color: var(--color-neutral); }
+    .week-day-pill .day-num { font-size: 1.05rem; font-weight: 700; }
+    .week-day-pill .day-dot { width: 4px; height: 4px; border-radius: 50%; background: var(--color-working-green); position: absolute; bottom: 5px; }
+
+    /* Escalated Deadline Card */
+    .escalated-deadline-card {
+      background: var(--color-coral-tint);
+      border: 1.5px solid var(--color-alert-coral);
+      border-radius: var(--radius-lg);
+      padding: 20px 22px;
+    }
+    .milestone-checklist {
+      background: rgba(255, 255, 255, 0.75);
+      border-radius: var(--radius-md);
+      padding: 12px 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      margin: 14px 0;
+    }
+    .milestone-item { display: flex; align-items: center; gap: 10px; font-size: 0.82rem; color: #450A0A; cursor: pointer; }
+
+    /* Timeline */
+    .timeline-card { background: var(--color-surface); border: 1px solid var(--color-border); border-radius: var(--radius-lg); padding: 22px; }
+    .timeline-row { display: flex; gap: 20px; padding: 12px 0; position: relative; }
+    .timeline-time-label { width: 60px; font-size: 0.78rem; font-weight: 600; color: var(--color-neutral); text-align: right; }
+    .timeline-content-slot { flex: 1; position: relative; }
+    .slot-block { border-radius: var(--radius-md); padding: 12px 16px; position: relative; }
+    .slot-block.routine-completed { background: var(--color-pale-tint); border-left: 4px solid var(--color-working-green); }
+    .slot-block.buffer { background: #F9FAFB; border: 1px dashed #CBD5E1; color: var(--color-neutral); font-size: 0.78rem; }
+    .slot-block.overdue-assignment { background: var(--color-coral-tint); border-left: 4px solid var(--color-alert-coral); }
+    .slot-block.meeting { background: #EFF6FF; border-left: 4px solid #3B82F6; }
+    .slot-block.suggested-focus { background: #FAF5FF; border: 1.5px dashed #9333EA; display: flex; align-items: center; justify-content: space-between; }
+    .now-line-marker { position: absolute; left: 0; right: 0; height: 2px; background: var(--color-alert-coral); z-index: 10; display: flex; align-items: center; }
+    .now-tag { background: var(--color-alert-coral); color: #FFF; font-size: 0.65rem; font-weight: 800; padding: 1px 6px; border-radius: 4px; margin-left: 8px; }
+
+    /* Right Rail Modules */
+    .rail-widget { background: var(--color-surface); border: 1px solid var(--color-border); border-radius: var(--radius-lg); padding: 16px 18px; }
+    .rail-widget-title { font-size: 0.8rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--color-neutral); margin-bottom: 12px; }
+    .mini-cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; text-align: center; font-size: 0.74rem; }
+    .mini-cal-day { padding: 6px 0; border-radius: var(--radius-sm); cursor: pointer; }
+    .mini-cal-day.active { background: var(--color-forest); color: #FFF; font-weight: 700; }
+
+    /* Teammates */
+    .teammates-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 12px; margin-top: 12px; }
+    .teammate-item { background: var(--color-neutral-subtle); border-radius: var(--radius-md); padding: 10px; display: flex; align-items: center; gap: 10px; }
+    .teammate-avatar { width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 0.78rem; position: relative; }
+
+    /* Routine Row */
+    .routine-row { background: var(--color-surface); border: 1px solid var(--color-border); border-radius: var(--radius-lg); padding: 12px 18px; display: flex; align-items: center; justify-content: space-between; }
+    .routine-icon-box { width: 36px; height: 36px; border-radius: var(--radius-md); background: var(--color-pale-tint); color: var(--color-working-green); display: flex; align-items: center; justify-content: center; font-size: 1.1rem; }
+
+    /* Avatar Stack */
+    .avatar-stack { display: flex; align-items: center; }
+    .avatar-stack-item { width: 26px; height: 26px; border-radius: 50%; border: 2px solid #FFF; margin-left: -8px; font-size: 0.68rem; font-weight: 700; display: flex; align-items: center; justify-content: center; color: #FFF; }
+    .avatar-stack-item:first-child { margin-left: 0; }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+
+  <script type="text/babel">
+    const { useState, useEffect } = React;
+
+    // --- MOCK DATA ---
+    const initialTasks = [
+      { id: 1, title: "CS101 Term Paper Draft", category: "Academic", priority_score: 92, urgency: "high", deadline: "2026-10-28 17:00", scheduledSlot: "2026-10-28 10:00 - 12:30", completed: false },
+      { id: 2, title: "Math 204 Problem Set 4", category: "Academic", priority_score: 78, urgency: "high", deadline: "2026-10-29 23:59", scheduledSlot: "2026-10-29 14:00 - 16:00", completed: false },
+      { id: 3, title: "Literature Review Citations", category: "Research", priority_score: 65, urgency: "medium", deadline: "2026-10-30 18:00", scheduledSlot: "2026-10-30 09:00 - 10:30", completed: false },
+      { id: 4, title: "Biology Lab Report", category: "Academic", priority_score: 42, urgency: "low", deadline: "2026-11-02 12:00", scheduledSlot: "2026-11-01 11:00 - 13:00", completed: false },
+      { id: 5, title: "Club Fest Poster Design", category: "Campus", priority_score: 35, urgency: "low", deadline: "2026-11-04 15:00", scheduledSlot: "2026-11-03 16:00 - 17:30", completed: true },
+    ];
+
+    // --- COMPONENT: AT A GLANCE METRICS ---
+    function AtAGlanceMetrics({ tasks = initialTasks }) {
+      const [seconds, setSeconds] = useState(6138); // 01:42:18
+      const [isRunning, setIsRunning] = useState(true);
+
+      useEffect(() => {
+        if (!isRunning) return;
+        const t = setInterval(() => setSeconds(s => s + 1), 1000);
+        return () => clearInterval(t);
+      }, [isRunning]);
+
+      const formatTime = (total) => {
+        const h = Math.floor(total / 3600).toString().padStart(2, '0');
+        const m = Math.floor((total % 3600) / 60).toString().padStart(2, '0');
+        const s = (total % 60).toString().padStart(2, '0');
+        return `${h}:${m}:${s}`;
+      };
+
+      const pendingCount = tasks.filter(t => !t.completed).length;
+
+      return (
+        <div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+            <span style={{ fontSize: '0.74rem', fontWeight: 700, textTransform: 'uppercase', color: '#6B7280' }}>At a Glance</span>
+            <span className="pill-eyebrow forest">Daily Workspace Active</span>
+          </div>
+
+          <div className="metrics-row">
+            {/* Deadlines */}
+            <div className="metric-card">
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
+                <span style={{ fontSize: '0.74rem', fontWeight: 700, textTransform: 'uppercase', color: '#6B7280' }}>Deadlines</span>
+                <span className="pill-eyebrow coral">{pendingCount} Pending</span>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px' }}>
+                <span className="metric-number">{pendingCount}</span>
+                <span style={{ fontSize: '0.78rem', color: '#6B7280' }}>/ {tasks.length} total (4 academic)</span>
+              </div>
+              <div className="metric-progress-bar">
+                <div className="metric-progress-fill" style={{ width: '40%' }} />
+              </div>
+            </div>
+
+            {/* Daily Routine */}
+            <div className="metric-card">
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
+                <span style={{ fontSize: '0.74rem', fontWeight: 700, textTransform: 'uppercase', color: '#6B7280' }}>Daily Routine</span>
+                <span className="pill-eyebrow green">On Track</span>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                <div className="ring-circle">41%</div>
+                <div>
+                  <div style={{ fontSize: '0.86rem', fontWeight: 700 }}>3 of 7 habits</div>
+                  <div style={{ fontSize: '0.72rem', color: '#6B7280' }}>Next: Morning Yoga (12:00 AM)</div>
+                </div>
+              </div>
+            </div>
+
+            {/* Study Streak */}
+            <div className="metric-card">
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
+                <span style={{ fontSize: '0.74rem', fontWeight: 700, textTransform: 'uppercase', color: '#6B7280' }}>Study Streak</span>
+                <span className="pill-eyebrow amber">Top 5%</span>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px' }}>
+                <span className="metric-number">5</span>
+                <span style={{ fontSize: '0.78rem', color: '#6B7280' }}>consecutive days</span>
+              </div>
+              <div style={{ fontSize: '0.72rem', color: '#6B7280', marginTop: '4px' }}>Logged: 2h 45m today</div>
+            </div>
+
+            {/* Active Focus Session */}
+            <div className="metric-card" style={{ borderColor: 'rgba(31, 92, 61, 0.25)', background: '#FAFDFB' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
+                <span style={{ fontSize: '0.74rem', fontWeight: 700, textTransform: 'uppercase', color: '#6B7280' }}>Active Focus Session</span>
+                <span className="pill-eyebrow green">Pomodoro 50/10</span>
+              </div>
+              <div className="metric-number" style={{ fontSize: '1.75rem', margin: '4px 0' }}>{formatTime(seconds)}</div>
+              <div style={{ fontSize: '0.72rem', color: '#1B3B2E', fontWeight: 600, marginBottom: '8px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                CS101 Paper - Literature Review
+              </div>
+              <div style={{ display: 'flex', gap: '6px' }}>
+                <button className="btn btn-secondary btn-sm" style={{ flex: 1 }} onClick={() => setIsRunning(!isRunning)}>
+                  {isRunning ? 'Pause' : 'Resume'}
+                </button>
+                <button className="btn btn-secondary btn-sm" onClick={() => setSeconds(s => s + 300)}>5m Break</button>
+                <button className="btn btn-primary btn-sm" onClick={() => { setIsRunning(false); alert('Focus session completed! Great work!'); }}>Complete</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    // --- COMPONENT: WEEK STRIP ---
+    function WeekStrip() {
+      const [selected, setSelected] = useState(28);
+      const days = [
+        { name: 'Sun', num: 25 }, { name: 'Mon', num: 26, dot: true },
+        { name: 'Tue', num: 27 }, { name: 'Wed', num: 28, today: true, dot: true },
+        { name: 'Thu', num: 29, dot: true }, { name: 'Fri', num: 30 },
+        { name: 'Sat', num: 31, dot: true }
+      ];
+
+      return (
+        <div className="week-strip-card">
+          <div>
+            <div style={{ fontSize: '0.88rem', fontWeight: 700 }}>Weekly Schedule</div>
+            <div style={{ fontSize: '0.74rem', color: '#6B7280' }}>October 25 – October 31, 2026</div>
+          </div>
+          <div style={{ display: 'flex', gap: '8px' }}>
+            {days.map(d => (
+              <div
+                key={d.num}
+                className={`week-day-pill ${d.today ? 'today' : ''}`}
+                style={{
+                  border: selected === d.num && !d.today ? '1.5px solid #1B3B2E' : undefined,
+                  background: selected === d.num && !d.today ? '#E7F0EA' : undefined
+                }}
+                onClick={() => setSelected(d.num)}
+              >
+                <span className="day-name">{d.name}</span>
+                <span className="day-num">{d.num}</span>
+                {d.dot && <span className="day-dot" style={{ background: d.today ? '#FFF' : '#1F5C3D' }} />}
+              </div>
+            ))}
+          </div>
+        </div>
+      );
+    }
+
+    // --- COMPONENT: ESCALATED DEADLINE CARD ---
+    function EscalatedDeadlineCard() {
+      const [subtasks, setSubtasks] = useState([
+        { id: 1, text: "Finalize dataset & methodologies review", done: true },
+        { id: 2, text: "Draft conclusion & future work", done: false },
+        { id: 3, text: "Write task summary & IEEE format cross-check", done: false }
+      ]);
+
+      const toggle = (id) => {
+        setSubtasks(subtasks.map(s => s.id === id ? { ...s, done: !s.done } : s));
+      };
+
+      return (
+        <div className="escalated-deadline-card">
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div style={{ display: 'flex', gap: '8px' }}>
+              <span className="pill-eyebrow coral" style={{ background: '#B23A3A', color: '#FFF' }}>DUE TODAY • 5:00 PM</span>
+              <span className="pill-eyebrow neutral">Academic</span>
+            </div>
+            <span style={{ background: '#B23A3A', color: '#FFF', fontSize: '0.72rem', fontWeight: 700, padding: '3px 8px', borderRadius: '9999px' }}>
+              03h 14m left
+            </span>
+          </div>
+
+          <div style={{ fontSize: '1.25rem', fontWeight: 800, color: '#7F1D1D', marginTop: '6px' }}>
+            CS101 Term Paper Draft
+          </div>
+          <div style={{ fontSize: '0.8rem', color: '#991B1B', margin: '2px 0 12px 0' }}>
+            Completed {subtasks.filter(s => s.done).length} of {subtasks.length} milestones
+          </div>
+
+          <div className="milestone-checklist">
+            {subtasks.map(s => (
+              <label key={s.id} className="milestone-item">
+                <input type="checkbox" checked={s.done} onChange={() => toggle(s.id)} style={{ accentColor: '#B23A3A' }} />
+                <span style={{ textDecoration: s.done ? 'line-through' : 'none', opacity: s.done ? 0.65 : 1 }}>{s.text}</span>
+              </label>
+            ))}
+          </div>
+
+          <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+            <button className="btn btn-secondary btn-sm" style={{ background: '#FFF', color: '#7F1D1D', borderColor: '#FCA5A5' }} onClick={() => {
+              const text = prompt("Enter subtask:");
+              if (text) setSubtasks([...subtasks, { id: Date.now(), text, done: false }]);
+            }}>
+              + Add Subtask
+            </button>
+            <button className="btn btn-coral btn-sm" onClick={() => alert("Opening Paper Workspace...")}>
+              Open Paper Workspace →
+            </button>
+          </div>
+        </div>
+      );
+    }
+
+    // --- COMPONENT: RIGHT RAIL ---
+    function RightRail() {
+      const days = [
+        'Su','Mo','Tu','We','Th','Fr','Sa',
+        25, 26, 27, 28, 29, 30, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31
+      ];
+
+      return (
+        <aside className="workspace-right-rail">
+          {/* Mini Calendar */}
+          <div className="rail-widget">
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
+              <span className="rail-widget-title" style={{ margin: 0 }}>October 2026</span>
+              <span style={{ fontSize: '0.72rem', color: '#6B7280' }}>&lt; &gt;</span>
+            </div>
+            <div className="mini-cal-grid">
+              {['Su','Mo','Tu','We','Th','Fr','Sa'].map(h => <div key={h} style={{ fontWeight: 700, color: '#6B7280' }}>{h}</div>)}
+              {[25,26,27,28,29,30,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31].map((n, i) => (
+                <div key={i} className={`mini-cal-day ${n === 28 ? 'active' : ''}`}>
+                  {n}
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Next 48 Hours */}
+          <div className="rail-widget">
+            <span className="rail-widget-title">⚡ Next 48 Hours</span>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+              <div style={{ paddingBottom: '8px', borderBottom: '1px solid #E5E7EB' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <strong style={{ fontSize: '0.82rem' }}>CS101 Term Paper Final</strong>
+                  <span className="pill-eyebrow coral">Due 5 PM</span>
+                </div>
+                <div style={{ fontSize: '0.72rem', color: '#6B7280' }}>Today, 5:00 PM • 35% Weightage</div>
+              </div>
+
+              <div style={{ paddingBottom: '8px', borderBottom: '1px solid #E5E7EB' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <strong style={{ fontSize: '0.82rem' }}>Math 204 Midterm Prep</strong>
+                  <span className="pill-eyebrow green">Study Session</span>
+                </div>
+                <div style={{ fontSize: '0.72rem', color: '#6B7280' }}>Tomorrow, 10:00 AM • Spaced Repetition</div>
+              </div>
+
+              <div>
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <strong style={{ fontSize: '0.82rem' }}>Product Strategy Sync</strong>
+                  <span className="pill-eyebrow amber">Meeting</span>
+                </div>
+                <div style={{ fontSize: '0.72rem', color: '#6B7280' }}>Tomorrow, 2:30 PM • 4 Attendees</div>
+              </div>
+            </div>
+          </div>
+
+          {/* Connected Calendars */}
+          <div className="rail-widget">
+            <span className="rail-widget-title">Connected Calendars</span>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#EA580C' }} />
+                  <span style={{ fontSize: '0.8rem', fontWeight: 600 }}>University Canvas</span>
+                </div>
+                <input type="checkbox" defaultChecked style={{ accentColor: '#1B3B2E' }} />
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#2563EB' }} />
+                  <span style={{ fontSize: '0.8rem', fontWeight: 600 }}>Google Workspace</span>
+                </div>
+                <input type="checkbox" defaultChecked style={{ accentColor: '#1B3B2E' }} />
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#059669' }} />
+                  <span style={{ fontSize: '0.8rem', fontWeight: 600 }}>Personal & Habits</span>
+                </div>
+                <input type="checkbox" defaultChecked style={{ accentColor: '#1B3B2E' }} />
+              </div>
+            </div>
+          </div>
+        </aside>
+      );
+    }
+
+    // --- SCREEN: HOME ---
+    function HomeScreen() {
+      const [habitDone, setHabitDone] = useState(false);
+
+      return (
+        <div className="workspace-body">
+          <div className="workspace-primary-col">
+            {/* Greeting Banner */}
+            <div className="greeting-banner">
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <span className="pill-eyebrow" style={{ background: 'rgba(255,255,255,0.2)', color: '#FFF' }}>
+                  DAILY WORKSPACE ACTIVE • OCTOBER 28
+                </span>
+                <span style={{ fontSize: '0.74rem', color: '#A7F3D0' }}>● Auto-Synced Workspace</span>
+              </div>
+              <h1 style={{ fontSize: '1.6rem', color: '#FFF', margin: '10px 0 4px 0' }}>Hello, Totok Michael 👋</h1>
+              <p style={{ fontSize: '0.88rem', color: '#E2E8F0' }}>
+                Welcome back! Here is your daily focus: <strong>3 urgent tasks</strong>, <strong>1 meeting</strong>, and <strong>1 routine habit</strong>.
+              </p>
+              <div className="greeting-pills">
+                <div className="status-pill">📌 3 Deadlines Today</div>
+                <div className="status-pill">🔥 5-Day Study Streak</div>
+                <div className="status-pill">🌱 Routine: {habitDone ? '57% Done' : '41% Done'}</div>
+                <div className="status-pill">👥 Meet: CS101 Paper @ 1:00 PM</div>
+              </div>
+            </div>
+
+            <AtAGlanceMetrics />
+            <WeekStrip />
+
+            {/* Routine Row */}
+            <div className="routine-row">
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                <div className="routine-icon-box">{habitDone ? '✓' : '🧘'}</div>
+                <div>
+                  <div style={{ fontSize: '0.88rem', fontWeight: 700, textDecoration: habitDone ? 'line-through' : 'none' }}>
+                    Morning Yoga & Breathwork
+                  </div>
+                  <div style={{ fontSize: '0.74rem', color: '#6B7280' }}>
+                    12:00 AM • 30m • <span className="pill-eyebrow green">High Energy</span> • <span className="pill-eyebrow neutral">ROUTINE HABIT</span>
+                  </div>
+                </div>
+              </div>
+              <button className={`btn ${habitDone ? 'btn-pale' : 'btn-primary'} btn-sm`} onClick={() => setHabitDone(!habitDone)}>
+                {habitDone ? 'Completed ✓' : 'Log Habit'}
+              </button>
+            </div>
+
+            <EscalatedDeadlineCard />
+
+            {/* Peak Cognitive Window Tip */}
+            <div style={{ background: '#E7F0EA', borderLeft: '4px solid #1F5C3D', padding: '12px 16px', borderRadius: '8px', fontSize: '0.82rem', color: '#1B3B2E' }}>
+              💡 <strong>Peak Cognitive Window:</strong> Tomorrow 10:00 AM – 12:30 PM is predicted by Claude AI to be your highest focus period. Recommended for deep analytical writing tasks.
+            </div>
+          </div>
+
+          <RightRail />
+        </div>
+      );
+    }
+
+    // --- SCREEN: DASHBOARD ---
+    function DashboardScreen() {
+      return (
+        <div className="workspace-body">
+          <div className="workspace-primary-col">
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div>
+                <h1 style={{ fontSize: '1.6rem', fontWeight: 800 }}>Workspace Dashboard</h1>
+                <p style={{ fontSize: '0.84rem', color: '#6B7280' }}>High-density overview of routines, teammates, and focus queues.</p>
+              </div>
+              <button className="btn btn-secondary btn-sm" onClick={() => alert("Recalculating AI urgency scores...")}>
+                🔄 Recalculate Priorities
+              </button>
+            </div>
+
+            <AtAGlanceMetrics />
+            <WeekStrip />
+
+            {/* Today's Schedule & Routine */}
+            <div className="rail-widget">
+              <span className="rail-widget-title">Today's Schedule & Routine</span>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#F0FDF4', padding: '10px 12px', borderRadius: '8px', borderLeft: '4px solid #16A34A' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <span>🧘</span>
+                    <strong style={{ fontSize: '0.84rem' }}>Morning Yoga Session & Reset</strong>
+                  </div>
+                  <span className="pill-eyebrow green">Done ✓</span>
+                </div>
+
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#EFF6FF', padding: '10px 12px', borderRadius: '8px', borderLeft: '4px solid #2563EB' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <span>👥</span>
+                    <div>
+                      <strong style={{ fontSize: '0.84rem' }}>Meeting with Team • Design Pod</strong>
+                      <div style={{ fontSize: '0.72rem', color: '#2563EB' }}>2:30 PM - 3:15 PM • Google Meet</div>
+                    </div>
+                  </div>
+                  <button className="btn btn-secondary btn-sm" onClick={() => alert("Opening Google Meet...")}>Join Meet →</button>
+                </div>
+              </div>
+            </div>
+
+            {/* Team Collaboration */}
+            <div className="rail-widget">
+              <span className="rail-widget-title">Team Collaboration</span>
+              <div className="teammates-grid">
+                <div className="teammate-item">
+                  <div className="teammate-avatar" style={{ background: '#3B82F6', color: '#FFF' }}>
+                    AL
+                    <span className="presence-dot" />
+                  </div>
+                  <div>
+                    <strong style={{ fontSize: '0.8rem' }}>Alex Lin</strong>
+                    <div style={{ fontSize: '0.7rem', color: '#6B7280' }}>In Design Pod</div>
+                  </div>
+                </div>
+
+                <div className="teammate-item">
+                  <div className="teammate-avatar" style={{ background: '#8B5CF6', color: '#FFF' }}>
+                    ED
+                    <span className="presence-dot" />
+                  </div>
+                  <div>
+                    <strong style={{ fontSize: '0.8rem' }}>Edwin Vance</strong>
+                    <div style={{ fontSize: '0.7rem', color: '#6B7280' }}>Researching</div>
+                  </div>
+                </div>
+
+                <div className="teammate-item">
+                  <div className="teammate-avatar" style={{ background: '#EC4899', color: '#FFF' }}>
+                    SR
+                    <span className="presence-dot" style={{ background: '#F59E0B' }} />
+                  </div>
+                  <div>
+                    <strong style={{ fontSize: '0.8rem' }}>Sarah Rose</strong>
+                    <div style={{ fontSize: '0.7rem', color: '#6B7280' }}>Writing Draft</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <EscalatedDeadlineCard />
+          </div>
+
+          <RightRail />
+        </div>
+      );
+    }
+
+    // --- SCREEN: CALENDAR & DAILY SCHEDULE ---
+    function CalendarScreen() {
+      const [slotAccepted, setSlotAccepted] = useState(false);
+
+      return (
+        <div className="workspace-body">
+          <div className="workspace-primary-col">
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#FFF', padding: '12px 20px', borderRadius: '14px', border: '1px solid #E2E8F0' }}>
+              <div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <h1 style={{ fontSize: '1.4rem', fontWeight: 800 }}>Calendar & Daily Schedule</h1>
+                  <span className="pill-eyebrow green">Auto-synced with Canvas</span>
+                </div>
+                <div style={{ fontSize: '0.78rem', color: '#6B7280' }}>Wednesday, October 28, 2026 • 4 Active slots scheduled</div>
+              </div>
+
+              <div style={{ display: 'flex', gap: '8px' }}>
+                <button className="btn btn-secondary btn-sm" onClick={() => alert("Resolving calendar conflicts against holidays and club fests...")}>
+                  🛡️ Check Conflicts
+                </button>
+                <button className="btn btn-primary btn-sm" onClick={() => alert("Triggering Claude AI schedule optimization...")}>
+                  ⚡ Generate AI Schedule
+                </button>
+              </div>
+            </div>
+
+            <AtAGlanceMetrics />
+
+            {/* Day Timeline Centerpiece */}
+            <div className="timeline-card">
+              <span className="rail-widget-title">Timeline • Eastern Time (GMT-4)</span>
+
+              <div style={{ display: 'flex', flexDirection: 'column', marginTop: '12px' }}>
+                {/* 08:00 Free Buffer */}
+                <div className="timeline-row">
+                  <div className="timeline-time-label">08:00 AM</div>
+                  <div className="timeline-content-slot">
+                    <div className="slot-block buffer">
+                      ⏳ Unscheduled Morning Buffer • 60 mins free for reflection / breakfast
+                    </div>
+                  </div>
+                </div>
+
+                {/* 09:00 Routine Completed */}
+                <div className="timeline-row">
+                  <div className="timeline-time-label">09:00 AM</div>
+                  <div className="timeline-content-slot">
+                    <div className="slot-block routine-completed">
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <div>
+                          <span>🧘 </span><strong>Yoga Session & Reset</strong>
+                          <span className="pill-eyebrow green" style={{ marginLeft: '8px' }}>Completed ✓</span>
+                        </div>
+                        <span style={{ fontSize: '0.74rem', color: '#166534' }}>09:00 AM – 09:45 AM</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* 11:00 Escalated with NOW Marker */}
+                <div className="timeline-row" style={{ marginTop: '8px', marginBottom: '8px' }}>
+                  <div className="timeline-time-label" style={{ color: '#B23A3A', fontWeight: 800 }}>11:00 AM</div>
+                  <div className="timeline-content-slot">
+                    <div className="now-line-marker" style={{ top: '22px' }}>
+                      <span className="now-tag">● NOW 11:24 AM</span>
+                    </div>
+                    <div className="slot-block overdue-assignment" style={{ paddingTop: '28px' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+                        <div>
+                          <span className="pill-eyebrow coral" style={{ background: '#B23A3A', color: '#FFF' }}>HIGH PRIORITY DEADLINE</span>
+                          <strong style={{ fontSize: '1.05rem', color: '#7F1D1D', marginLeft: '8px' }}>
+                            Assignment: Neural Architecture Analysis
+                          </strong>
+                        </div>
+                        <span style={{ fontSize: '0.74rem', fontWeight: 700, color: '#991B1B' }}>10:00 AM – 12:30 PM (Due Today 5 PM)</span>
+                      </div>
+                      <p style={{ fontSize: '0.8rem', color: '#450A0A', marginBottom: '8px' }}>
+                        Deep-dive comparative evaluation on CNN vs Vision Transformers memory bandwidth on CUDA.
+                      </p>
+                      <div style={{ display: 'flex', gap: '8px' }}>
+                        <span className="pill-eyebrow neutral" style={{ background: '#FFF' }}>✓ Benchmark diagram</span>
+                        <span className="pill-eyebrow neutral" style={{ background: '#FFF' }}>⏳ Formatting</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* 13:30 Meeting Block */}
+                <div className="timeline-row">
+                  <div className="timeline-time-label">01:30 PM</div>
+                  <div className="timeline-content-slot">
+                    <div className="slot-block meeting">
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <div>
+                          <span className="pill-eyebrow" style={{ background: '#DBEAFE', color: '#1D4ED8' }}>MEETING</span>
+                          <strong style={{ fontSize: '0.92rem', color: '#1E40AF', marginLeft: '8px' }}>Product Strategy Review & Roadmap</strong>
+                          <div style={{ fontSize: '0.74rem', color: '#3B82F6', marginTop: '4px' }}>01:30 PM – 02:45 PM • Design System alignment & sprint goals</div>
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                          <div className="avatar-stack">
+                            <div className="avatar-stack-item" style={{ background: '#3B82F6' }}>AL</div>
+                            <div className="avatar-stack-item" style={{ background: '#8B5CF6' }}>EV</div>
+                            <div className="avatar-stack-item" style={{ background: '#EC4899' }}>SR</div>
+                            <div className="avatar-stack-item" style={{ background: '#10B981' }}>+2</div>
+                          </div>
+                          <button className="btn btn-primary btn-sm" style={{ background: '#2563EB' }} onClick={() => alert("Joining Meet...")}>
+                            📹 Join Meet
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* 15:00 AI Suggested Focus Block with Accept Slot */}
+                <div className="timeline-row">
+                  <div className="timeline-time-label">03:00 PM</div>
+                  <div className="timeline-content-slot">
+                    <div className="slot-block suggested-focus" style={{
+                      borderColor: slotAccepted ? '#10B981' : '#9333EA',
+                      background: slotAccepted ? '#F0FDF4' : '#FAF5FF',
+                      borderStyle: slotAccepted ? 'solid' : 'dashed'
+                    }}>
+                      <div>
+                        <span className="pill-eyebrow" style={{ background: slotAccepted ? '#DCFCE7' : '#F3E8FF', color: slotAccepted ? '#15803D' : '#7E22CE' }}>
+                          {slotAccepted ? 'COMMITTED FOCUS SLOT' : 'AI PROPOSED FOCUS BLOCK'}
+                        </span>
+                        <strong style={{ fontSize: '0.92rem', color: slotAccepted ? '#14532D' : '#581C87', marginLeft: '8px' }}>
+                          Suggested Focus Block: CS101 Diagramming
+                        </strong>
+                        <div style={{ fontSize: '0.75rem', color: slotAccepted ? '#166534' : '#6B21A8', marginTop: '4px' }}>
+                          03:00 PM – 04:30 PM • Fitted into free gap between lecture and evening review
+                        </div>
+                      </div>
+
+                      {slotAccepted ? (
+                        <span className="pill-eyebrow green" style={{ padding: '6px 12px' }}>✓ Slot Accepted & Locked</span>
+                      ) : (
+                        <button className="btn btn-primary btn-sm" style={{ background: '#7E22CE' }} onClick={() => setSlotAccepted(true)}>
+                          ⚡ Accept Slot
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <RightRail />
+        </div>
+      );
+    }
+
+    // --- SCREEN: TASKS ---
+    function TasksScreen({ tasks = initialTasks }) {
+      return (
+        <div className="workspace-body">
+          <div className="workspace-primary-col">
+            <h1 style={{ fontSize: '1.6rem', fontWeight: 800 }}>Tasks & Commitments</h1>
+            <p style={{ fontSize: '0.84rem', color: '#6B7280' }}>Priority-scored academic tasks, study topics, and exam preparations.</p>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginTop: '12px' }}>
+              {tasks.map(t => (
+                <div key={t.id} className="metric-card">
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
+                    <div style={{ display: 'flex', gap: '8px' }}>
+                      <span className={`pill-eyebrow ${t.urgency === 'high' ? 'coral' : t.urgency === 'medium' ? 'amber' : 'neutral'}`}>
+                        {t.urgency.toUpperCase()}
+                      </span>
+                      <span className="pill-eyebrow forest">{t.category}</span>
+                    </div>
+                    <strong style={{ color: t.urgency === 'high' ? '#B23A3A' : '#1F5C3D' }}>Score: {t.priority_score}/100</strong>
+                  </div>
+                  <div style={{ fontSize: '1.05rem', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <span>{t.title}</span>
+                    {(t.googleEventId || t.category === 'Google Calendar' || t.id === 1) && (
+                      <span className="pill-eyebrow" style={{ background: '#E0F2FE', color: '#0369A1', fontSize: '0.65rem', border: '1px solid #BAE6FD' }}>
+                        📅 Synced with Google
+                      </span>
+                    )}
+                  </div>
+                  <div style={{ fontSize: '0.76rem', color: '#6B7280', marginTop: '6px' }}>
+                    📅 {t.scheduledSlot ? `Scheduled: ${t.scheduledSlot}` : `Deadline: ${t.deadline}`}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <RightRail />
+        </div>
+      );
+    }
+
+    // --- SCREEN: UPLOAD & GOOGLE SYNC ---
+    function UploadScreen() {
+      const [type, setType] = useState('timetable');
+      const [status, setStatus] = useState('idle');
+      const [googleConnected, setGoogleConnected] = useState(false);
+      const [googlePreview, setGooglePreview] = useState(null);
+      const [googleCommitSuccess, setGoogleCommitSuccess] = useState(false);
+
+      const sampleGoogleEvents = [
+        { task: "Design System Pod Sync", scheduledSlot: "2026-10-28 13:30 - 14:45", category: "Google Calendar", urgency: "medium" },
+        { task: "CS101 Paper Office Hours", scheduledSlot: "2026-10-29 11:00 - 12:00", category: "Google Calendar", urgency: "high" },
+        { task: "Weekly Lab Retrospective", scheduledSlot: "2026-10-30 15:00 - 16:30", category: "Google Calendar", urgency: "low" }
+      ];
+
+      return (
+        <div className="workspace-body">
+          <div className="workspace-primary-col">
+            <h1 style={{ fontSize: '1.6rem', fontWeight: 800 }}>Schedule & Document Ingestion</h1>
+            <p style={{ fontSize: '0.84rem', color: '#6B7280' }}>
+              Import commitments directly from Google Calendar or upload academic timetables and syllabi.
+            </p>
+
+            {/* Google Calendar One-Way Integration */}
+            <div className="collab-card" style={{ marginTop: '12px', border: '1px solid #E2E8F0', background: '#FFFFFF' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  <span style={{ fontSize: '1.5rem' }}>📅</span>
+                  <div>
+                    <h3 style={{ fontSize: '1rem', fontWeight: 700 }}>Google Calendar One-Way Sync</h3>
+                    <p style={{ fontSize: '0.76rem', color: '#6B7280' }}>
+                      Import Google Calendar events into LifeSync tasks with automatic conflict detection.
+                    </p>
+                  </div>
+                </div>
+
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <span className={`pill-eyebrow ${googleConnected ? 'green' : 'neutral'}`}>
+                    {googleConnected ? '● Connected: student@university.edu' : '○ Not Connected'}
+                  </span>
+                  {googleConnected ? (
+                    <button
+                      className="btn btn-secondary btn-sm"
+                      onClick={() => { setGoogleConnected(false); setGooglePreview(null); setGoogleCommitSuccess(false); }}
+                      style={{ color: '#B23A3A', borderColor: '#FCA5A5' }}
+                    >
+                      Disconnect
+                    </button>
+                  ) : (
+                    <button
+                      className="btn btn-forest btn-sm"
+                      onClick={() => setGoogleConnected(true)}
+                    >
+                      🔗 Connect Google Calendar
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {googleConnected && (
+                <div style={{ marginTop: '14px', padding: '14px', background: '#F8FAFC', borderRadius: '8px', border: '1px solid #E2E8F0' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '8px' }}>
+                    <div>
+                      <strong style={{ fontSize: '0.84rem' }}>Import Current Week's Google Events</strong>
+                      <div style={{ fontSize: '0.74rem', color: '#6B7280' }}>
+                        Pulls events via Google Calendar API, maps slots, and screens for schedule overlaps.
+                      </div>
+                    </div>
+                    <button
+                      className="btn btn-primary btn-sm"
+                      onClick={() => setGooglePreview(sampleGoogleEvents)}
+                    >
+                      ⚡ Import from Google Calendar
+                    </button>
+                  </div>
+
+                  {googlePreview && (
+                    <div style={{ marginTop: '14px', borderTop: '1px solid #E2E8F0', paddingTop: '12px' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                        <span style={{ fontSize: '0.85rem', fontWeight: 700 }}>Preview: 3 Events Found (0 Conflicts)</span>
+                        <button
+                          className="btn btn-primary btn-sm"
+                          onClick={() => { setGoogleCommitSuccess(true); setGooglePreview(null); }}
+                        >
+                          ✓ Confirm & Commit to Tasks
+                        </button>
+                      </div>
+
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                        {googlePreview.map((ev, i) => (
+                          <div key={i} style={{ background: '#FFF', padding: '8px 12px', borderRadius: '6px', border: '1px solid #E2E8F0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <div>
+                              <strong style={{ fontSize: '0.82rem' }}>{ev.task}</strong>
+                              <div style={{ fontSize: '0.72rem', color: '#6B7280' }}>Slot: {ev.scheduledSlot} • {ev.category}</div>
+                            </div>
+                            <span className={`pill-eyebrow ${ev.urgency === 'high' ? 'coral' : ev.urgency === 'medium' ? 'amber' : 'neutral'}`}>
+                              {ev.urgency.toUpperCase()}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {googleCommitSuccess && (
+                    <div style={{ marginTop: '12px', background: '#ECFDF5', padding: '10px 14px', borderRadius: '6px', color: '#065F46', fontSize: '0.82rem' }}>
+                      🎉 <strong>Successfully synced!</strong> 3 events imported and mapped into your active task list.
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+
+            <div className="rail-widget" style={{ marginTop: '12px' }}>
+              <span className="rail-widget-title">Select Document Type</span>
+              <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                {['timetable', 'syllabus', 'assignments', 'fest_schedule', 'holiday_calendar'].map(cat => (
+                  <button key={cat} className={`btn btn-sm ${type === cat ? 'btn-forest' : 'btn-secondary'}`} onClick={() => setType(cat)}>
+                    {cat.replace('_', ' ').toUpperCase()}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div
+              className="metric-card"
+              style={{ textAlign: 'center', padding: '40px 24px', border: '2px dashed #CBD5E1', cursor: 'pointer' }}
+              onClick={() => {
+                setStatus('uploading');
+                setTimeout(() => setStatus('done'), 1200);
+              }}
+            >
+              {status === 'done' ? (
+                <div>
+                  <div style={{ fontSize: '2.4rem', marginBottom: '8px' }}>🎉</div>
+                  <h3 style={{ color: '#15803D' }}>Document Ingestion Complete!</h3>
+                  <p style={{ fontSize: '0.84rem', color: '#475569' }}>Entities extracted and deduplicated into schedule.</p>
+                  <button className="btn btn-primary btn-sm" style={{ marginTop: '12px' }} onClick={(e) => { e.stopPropagation(); setStatus('idle'); }}>
+                    Upload Another
+                  </button>
+                </div>
+              ) : status === 'uploading' ? (
+                <div>
+                  <div style={{ fontSize: '2.4rem', marginBottom: '8px' }}>⏳</div>
+                  <h3>Processing with Claude AI & OCR...</h3>
+                  <p style={{ fontSize: '0.84rem', color: '#6B7280' }}>Stage: PARSE → EXTRACT → NORMALIZE</p>
+                </div>
+              ) : (
+                <div>
+                  <div style={{ fontSize: '2.4rem', marginBottom: '8px' }}>📄</div>
+                  <h3>Click to Upload Academic Document</h3>
+                  <p style={{ fontSize: '0.84rem', color: '#6B7280' }}>Supports PDF timetables, syllabi, or schedule images</p>
+                  <button className="btn btn-forest btn-sm" style={{ marginTop: '12px' }}>Browse Computer Files</button>
+                </div>
+              )}
+            </div>
+          </div>
+
+          <RightRail />
+        </div>
+      );
+    }
+
+
+    // --- SCREEN: MARKETING LANDING ---
+    function LandingScreen({ onEnterWorkspace }) {
+      return (
+        <div style={{ background: '#FFF' }}>
+          <header style={{ display: 'flex', justifyContent: 'space-between', padding: '16px 48px', borderBottom: '1px solid #E2E8F0', alignItems: 'center' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <span style={{ fontSize: '1.4rem', fontWeight: 800, color: '#1B3B2E' }}>LifeSync</span>
+              <span className="pill-eyebrow forest">v1.0</span>
+            </div>
+            <button className="btn btn-primary btn-sm" onClick={onEnterWorkspace}>Open Workspace →</button>
+          </header>
+
+          <div style={{ maxWidth: '960px', margin: '0 auto', padding: '60px 24px', textAlign: 'center' }}>
+            <div style={{ display: 'inline-flex', gap: '8px', background: '#E7F0EA', color: '#1B3B2E', padding: '6px 14px', borderRadius: '9999px', fontSize: '0.82rem', fontWeight: 700, marginBottom: '20px' }}>
+              ★★★★★ 4.9/5 Rating from 12,000+ Students & Researchers
+            </div>
+            <h1 style={{ fontSize: '3.2rem', fontWeight: 800, lineHeight: 1.15, marginBottom: '16px' }}>
+              Synchronize Your <span style={{ textDecoration: 'underline', textDecorationColor: '#D9A441' }}>Life</span>,<br />Work & Mind
+            </h1>
+            <p style={{ fontSize: '1.1rem', color: '#6B7280', maxWidth: '640px', margin: '0 auto 28px auto' }}>
+              The mindful student & professional planner turning chaotic deadlines, messy voice memos, and scattered routines into effortless daily flow.
+            </p>
+            <button className="btn btn-primary btn-lg" onClick={onEnterWorkspace}>
+              Launch Workspace Now →
+            </button>
+
+            <div style={{ display: 'flex', justifyContent: 'center', gap: '32px', marginTop: '40px', color: '#6B7280', fontWeight: 700, fontSize: '0.88rem' }}>
+              <span>MIT EECS</span> • <span>STANFORD</span> • <span>UC BERKELEY</span> • <span>ACM CHAPTER</span>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    // --- MAIN ROOT APP ---
+    function App() {
+      const [currentRoute, setCurrentRoute] = useState('home');
+
+      return (
+        <div className="workspace-shell">
+          {/* Sidebar */}
+          <aside className="workspace-sidebar">
+            <div>
+              <div className="sidebar-brand">
+                <span>LifeSync</span>
+                <span className="sidebar-brand-badge">PRO</span>
+              </div>
+              <div className="workspace-selector">
+                <span>Workspace 01 • Academic</span>
+                <span>▼</span>
+              </div>
+              <button className="btn-quick-task" onClick={() => {
+                const title = prompt("Enter quick task:");
+                if (title) alert(`Added: "${title}"`);
+              }}>
+                + New Quick Task
+              </button>
+
+              <nav style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                <div style={{ fontSize: '0.65rem', fontWeight: 700, textTransform: 'uppercase', color: '#9CA3AF', margin: '8px 10px 4px 10px' }}>
+                  Workspace
+                </div>
+                <div className={`sidebar-link ${currentRoute === 'home' ? 'active' : ''}`} onClick={() => setCurrentRoute('home')}>
+                  <span>🏠</span><span>Home</span>
+                </div>
+                <div className={`sidebar-link ${currentRoute === 'dashboard' ? 'active' : ''}`} onClick={() => setCurrentRoute('dashboard')}>
+                  <span>📊</span><span>Dashboard</span>
+                </div>
+                <div className={`sidebar-link ${currentRoute === 'calendar' ? 'active' : ''}`} onClick={() => setCurrentRoute('calendar')}>
+                  <span>📅</span><span>Calendar</span>
+                </div>
+                <div className={`sidebar-link ${currentRoute === 'tasks' ? 'active' : ''}`} onClick={() => setCurrentRoute('tasks')}>
+                  <span>✅</span><span>Tasks</span>
+                </div>
+
+                <div style={{ fontSize: '0.65rem', fontWeight: 700, textTransform: 'uppercase', color: '#9CA3AF', margin: '14px 10px 4px 10px' }}>
+                  Ingestion
+                </div>
+                <div className={`sidebar-link ${currentRoute === 'upload' ? 'active' : ''}`} onClick={() => setCurrentRoute('upload')}>
+                  <span>📤</span><span>Upload Pipeline</span>
+                </div>
+                <div className={`sidebar-link ${currentRoute === 'landing' ? 'active' : ''}`} onClick={() => setCurrentRoute('landing')}>
+                  <span>🌐</span><span>Product Landing</span>
+                </div>
+              </nav>
+            </div>
+
+            <div className="sidebar-user">
+              <div className="user-avatar">
+                TM
+                <div className="presence-dot" />
+              </div>
+              <div>
+                <div style={{ fontSize: '0.82rem', fontWeight: 600, color: '#FFF' }}>Totok Michael</div>
+                <div style={{ fontSize: '0.72rem', color: '#9CA3AF' }}>Student & Researcher</div>
+              </div>
+            </div>
+          </aside>
+
+          {/* Main Area */}
+          <div className="workspace-main">
+            <header className="workspace-topbar">
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.78rem', color: '#6B7280' }}>
+                <span style={{ width: '7px', height: '7px', borderRadius: '50%', background: '#10B981' }} />
+                <span>Authenticated • Cloud Sync Active • Wednesday, Oct 28</span>
+              </div>
+              <div style={{ display: 'flex', gap: '10px' }}>
+                <button className="btn btn-pale btn-sm" onClick={() => setCurrentRoute('upload')}>📤 Upload Documents</button>
+                <button className="btn btn-secondary btn-sm" onClick={() => setCurrentRoute('calendar')}>⚡ AI Schedulers</button>
+              </div>
+            </header>
+
+            {/* Active Screen */}
+            {currentRoute === 'home' && <HomeScreen />}
+            {currentRoute === 'dashboard' && <DashboardScreen />}
+            {currentRoute === 'calendar' && <CalendarScreen />}
+            {currentRoute === 'tasks' && <TasksScreen />}
+            {currentRoute === 'upload' && <UploadScreen />}
+            {currentRoute === 'landing' && <LandingScreen onEnterWorkspace={() => setCurrentRoute('home')} />}
+          </div>
+        </div>
+      );
+    }
+
+    ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+  </script>
+</body>
+</html>

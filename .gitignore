@@ -1,0 +1,33 @@
+# Environment variables and secrets
+.env
+*.env
+.env.*
+!.env.example
+*google-tokens.json
+
+# Python
+venv/
+.venv/
+__pycache__/
+*.py[cod]
+
+# Databases & local storage
+*.db
+*.sqlite3
+backend/storage/uploads/*
+!backend/storage/uploads/.gitkeep
+
+# Node / Frontend
+node_modules/
+dist/
+build/
+.next/
+node/
+git/
+*.zip
+
+# Testing & Cache
+.pytest_cache/
+.coverage
+htmlcov/
+*.log

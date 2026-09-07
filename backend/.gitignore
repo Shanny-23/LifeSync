@@ -1,0 +1,22 @@
+# Python virtual environment
+venv/
+.venv/
+env/
+
+# Byte-code / cache
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Environment variables
+.env
+
+# SQLite local database
+*.db
+*.sqlite
+*.sqlite3
+
+# Uploaded documents
+storage/uploads/*
+!storage/uploads/.gitkeep
+
