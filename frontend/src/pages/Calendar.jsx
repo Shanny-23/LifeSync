@@ -515,10 +515,8 @@ export default function Calendar() {
                 return (
                   <div
                     key={d.dateStr}
-                    className={`week-day-pill ${d.isToday ? 'today' : ''}`}
+                    className={`week-day-pill ${isSelected ? 'selected' : ''} ${d.isToday ? 'today' : ''}`}
                     style={{
-                      border: isSelected && !d.isToday ? '2px solid #1B3B2E' : undefined,
-                      background: isSelected && !d.isToday ? '#E7F0EA' : undefined,
                       cursor: 'pointer',
                       position: 'relative',
                     }}

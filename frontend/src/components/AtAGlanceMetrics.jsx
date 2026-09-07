@@ -1,23 +1,16 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useToast } from '../context/ToastContext';
 import StreakBreakdownModal from './StreakBreakdownModal';
-import { getFocusStats, completeFocusSession } from '../api/client';
+import { getFocusStats } from '../api/client';
 import gsap, { prefersReducedMotion } from '../lib/gsap';
 
 export default function AtAGlanceMetrics({
   tasks = [],
   routinePercent = 41,
   streakDays = 5,
-  activeTaskName = "CS101 Paper - Literature Review",
-  showTimerControls = true,
 }) {
   const navigate = useNavigate();
-  const toast = useToast();
   const streakRef = useRef(null);
-  const [seconds, setSeconds] = useState(6138); // 01:42:18
-  const [isRunning, setIsRunning] = useState(true);
-  const [isSubmittingFocus, setIsSubmittingFocus] = useState(false);
   const [focusStats, setFocusStats] = useState(null);
   const [isStreakModalOpen, setIsStreakModalOpen] = useState(false);
 
@@ -50,23 +43,6 @@ export default function AtAGlanceMetrics({
     return () => ctx.revert();
   }, [focusStats]);
 
-  useEffect(() => {
-    let interval = null;
-    if (isRunning) {
-      interval = setInterval(() => {
-        setSeconds((prev) => prev + 1);
-      }, 1000);
-    }
-    return () => clearInterval(interval);
-  }, [isRunning]);
-
-  const formatTime = (totalSecs) => {
-    const hrs = Math.floor(totalSecs / 3600).toString().padStart(2, '0');
-    const mins = Math.floor((totalSecs % 3600) / 60).toString().padStart(2, '0');
-    const secs = (totalSecs % 60).toString().padStart(2, '0');
-    return `${hrs}:${mins}:${secs}`;
-  };
-
   // Derive counts
   const totalTasks = tasks.length || 7;
   const completedTasks = tasks.filter((t) => t.status === 'completed' || t.completed).length;
@@ -78,26 +54,6 @@ export default function AtAGlanceMetrics({
     (t.category || '').toLowerCase().includes('cs') ||
     (t.category || '').toLowerCase().includes('math')
   ).length || 5;
-
-  const handleCompleteSession = async () => {
-    setIsRunning(false);
-    setIsSubmittingFocus(true);
-    try {
-      await completeFocusSession({
-        mode: 'POMODORO',
-        duration_seconds: seconds,
-        target_name: activeTaskName || 'General Focus',
-      });
-      toast.success('🎉 Focus session completed! +50 Mindful Focus XP recorded.');
-      window.dispatchEvent(new CustomEvent('lifesync:focus-completed'));
-      fetchStats();
-    } catch (err) {
-      console.error('Focus session save failed:', err);
-      toast.error('Could not save focus session to server.');
-    } finally {
-      setIsSubmittingFocus(false);
-    }
-  };
 
   return (
     <div className="at-a-glance-container">
@@ -189,54 +145,35 @@ export default function AtAGlanceMetrics({
           </div>
         </div>
 
-        {/* Metric 4: Active Focus Session / Time Tracker */}
-        <div className="metric-card" style={{ borderColor: 'rgba(31, 92, 61, 0.25)', background: '#FAFDFB' }}>
+        {/* Metric 4: Academic Focus & Weekly Study Target */}
+        <div
+          className="metric-card"
+          onClick={() => navigate('/calendar')}
+          style={{ cursor: 'pointer', transition: 'all 0.2s ease' }}
+          title="Click to view weekly study schedule and focus blocks"
+        >
           <div className="metric-card-header">
-            <span className="metric-label">Active Focus</span>
-            <span className="pill-eyebrow green">Pomodoro 50/10</span>
+            <span className="metric-label">Study Target</span>
+            <span className="pill-eyebrow green">On Track</span>
           </div>
-          <div className="metric-content" style={{ marginBottom: '2px' }}>
-            <span className="metric-number" style={{ fontSize: '1.6rem' }}>
-              {formatTime(seconds)}
+          <div className="metric-content">
+            <span className="metric-number">
+              {focusStats?.today_focus_minutes ? `${(focusStats.today_focus_minutes / 60 + 2.5).toFixed(1)}h` : '4.5h'}
+            </span>
+            <span className="metric-subtext">/ 6.0h weekly goal</span>
+          </div>
+          <div className="metric-progress-bar">
+            <div
+              className="metric-progress-fill"
+              style={{ width: '75%', background: 'linear-gradient(90deg, #14382A, #1F5C3D)' }}
+            />
+          </div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '6px', fontSize: '0.68rem' }}>
+            <span style={{ color: '#64748B' }}>2 study blocks today</span>
+            <span style={{ color: '#1F5C3D', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '3px' }}>
+              <span>Open Plan</span> <span>→</span>
             </span>
           </div>
-          <div style={{ fontSize: '0.70rem', color: '#1B3B2E', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginBottom: '6px' }}>
-            {activeTaskName}
-          </div>
-          {showTimerControls && (
-            <div style={{ display: 'flex', gap: '4px' }}>
-              <button
-                type="button"
-                className="btn btn-secondary btn-xs"
-                onClick={() => {
-                  setIsRunning(!isRunning);
-                  toast.info(isRunning ? 'Timer paused' : 'Timer resumed');
-                }}
-                style={{ flex: 1 }}
-              >
-                {isRunning ? 'Pause' : 'Resume'}
-              </button>
-              <button
-                type="button"
-                className="btn btn-secondary btn-xs"
-                onClick={() => {
-                  setSeconds((s) => s + 300);
-                  toast.info('+5 minutes added to focus session');
-                }}
-                title="Add 5 min break"
-              >
-                +5m
-              </button>
-              <button
-                type="button"
-                className="btn btn-primary btn-xs"
-                onClick={handleCompleteSession}
-                disabled={isSubmittingFocus}
-              >
-                {isSubmittingFocus ? 'Saving...' : 'Complete'}
-              </button>
-            </div>
-          )}
         </div>
       </div>
 

@@ -33,6 +33,10 @@ Grading Distribution:
 - Midterm Examination: 30%
 - Final Distributed Project & Demos: 40%
 
+University Recesses & Holidays:
+- Fall Break: Oct 12 - Oct 14, 2026 (University Closed)
+- Thanksgiving Recess: Nov 26 - Nov 29, 2026 (No Classes)
+
 Key Deadlines & Milestones:
 - Lab 1: Multithreaded RPC Framework due Sep 28, 2026 at 23:59
 - Lab 2: Raft Consensus State Machine due Oct 18, 2026 at 23:59
@@ -61,7 +65,18 @@ Dates: Oct 24, 2026 to Oct 26, 2026
 Schedule of Events:
 - 24-Hour AI Hackathon Kickoff on Oct 24, 2026 at 10:00 AM
 - Robotics Arena Finals on Oct 25, 2026 at 14:00
-- Project Expo & Keynote on Oct 26, 2026 at 16:00 in Main Auditorium`
+- Project Expo & Keynote on Oct 26, 2026 at 16:00 in Main Auditorium`,
+
+  holidays: `University Academic Calendar & Recess Circular (2026-2027)
+Office of the Academic Registrar & Student Affairs
+
+Observed Campus Holidays and Recesses:
+- Labor Day Holiday: Sep 07, 2026 (Campus Closed)
+- Fall Semester Recess: Oct 12 - Oct 14, 2026 (No Lectures or Labs)
+- Thanksgiving Holiday Break: Nov 26 - Nov 29, 2026 (University Holiday)
+- Winter Holiday Break: Dec 21, 2026 - Jan 04, 2027 (Campus Closed)
+- Martin Luther King Jr. Day: Jan 18, 2027 (University Holiday)
+- Spring Recess & Break: Mar 15 - Mar 19, 2027 (Academic Recess)`
 };
 
 export default function Upload() {
@@ -701,6 +716,14 @@ export default function Upload() {
                     onClick={() => setPasteText(SAMPLE_DOCUMENTS.fest)}
                   >
                     TechFest Circular
+                  </button>
+                  <button
+                    type="button"
+                    className="btn btn-secondary btn-sm"
+                    style={{ fontSize: '0.74rem', padding: '3px 8px' }}
+                    onClick={() => setPasteText(SAMPLE_DOCUMENTS.holidays)}
+                  >
+                    🏖️ Holiday Calendar
                   </button>
                 </div>
               </div>

@@ -6,10 +6,11 @@ export default function ExtractedReviewModal({ isOpen, onClose, uploadId, rawTex
   const [loading, setLoading] = useState(false);
   const [committing, setCommitting] = useState(false);
   const [data, setData] = useState(null);
-  const [activeTab, setActiveTab] = useState('overview'); // overview | deliverables | roadmap | schedule
+  const [activeTab, setActiveTab] = useState('overview'); // overview | deliverables | roadmap | schedule | holidays
   const [selectedAssignments, setSelectedAssignments] = useState([]);
   const [selectedExams, setSelectedExams] = useState([]);
   const [selectedEvents, setSelectedEvents] = useState([]);
+  const [selectedHolidays, setSelectedHolidays] = useState([]);
   const { addToast } = useToast();
 
   useEffect(() => {
@@ -31,6 +32,9 @@ export default function ExtractedReviewModal({ isOpen, onClose, uploadId, rawTex
         if (result.schedule) {
           setSelectedEvents(result.schedule.map((_, i) => i));
         }
+        if (result.holidays) {
+          setSelectedHolidays(result.holidays.map((_, i) => i));
+        }
       } catch (err) {
         console.error("Document analysis error:", err);
         addToast("Failed to load AI document intelligence", "alert");
@@ -51,14 +55,16 @@ export default function ExtractedReviewModal({ isOpen, onClose, uploadId, rawTex
       const chosenAssignments = (data.assignments || []).filter((_, i) => selectedAssignments.includes(i));
       const chosenExams = (data.exams || []).filter((_, i) => selectedExams.includes(i));
       const chosenEvents = (data.schedule || []).filter((_, i) => selectedEvents.includes(i));
+      const chosenHolidays = (data.holidays || []).filter((_, i) => selectedHolidays.includes(i));
 
       const result = await commitExtractedItems({
         assignments: chosenAssignments,
         exams: chosenExams,
         events: chosenEvents,
+        holidays: chosenHolidays,
       });
 
-      addToast(result.message || `Successfully committed ${chosenAssignments.length + chosenExams.length} items to LifeSync!`, "success");
+      addToast(result.message || `Successfully committed items to LifeSync!`, "success");
       window.dispatchEvent(new CustomEvent('lifesync:refresh'));
       onClose();
     } catch (err) {
@@ -87,6 +93,12 @@ export default function ExtractedReviewModal({ isOpen, onClose, uploadId, rawTex
     );
   };
 
+  const toggleHoliday = (idx) => {
+    setSelectedHolidays((prev) =>
+      prev.includes(idx) ? prev.filter((i) => i !== idx) : [...prev, idx]
+    );
+  };
+
   const courseInfo = data?.course_info || {};
   const workload = data?.workload_analysis || {};
   const grading = data?.grading_breakdown || [];
@@ -94,9 +106,10 @@ export default function ExtractedReviewModal({ isOpen, onClose, uploadId, rawTex
   const assignments = data?.assignments || [];
   const exams = data?.exams || [];
   const schedule = data?.schedule || [];
+  const holidays = data?.holidays || [];
   const recommendations = data?.recommendations || [];
 
-  const totalCommitted = selectedAssignments.length + selectedExams.length + selectedEvents.length;
+  const totalCommitted = selectedAssignments.length + selectedExams.length + selectedEvents.length + selectedHolidays.length;
 
   return (
     <div
@@ -222,6 +235,7 @@ export default function ExtractedReviewModal({ isOpen, onClose, uploadId, rawTex
               { id: 'deliverables', label: `🎯 Tasks & Exams`, count: assignments.length + exams.length },
               { id: 'roadmap', label: `🗺️ Syllabus Roadmap`, count: roadmap.length },
               { id: 'schedule', label: `📅 Lecture Times`, count: schedule.length },
+              { id: 'holidays', label: `🏖️ Holidays & Breaks`, count: holidays.length },
             ].map((tab) => (
               <button
                 key={tab.id}
@@ -424,6 +438,56 @@ export default function ExtractedReviewModal({ isOpen, onClose, uploadId, rawTex
                           <li key={i} style={{ marginBottom: '4px' }}>{rec}</li>
                         ))}
                       </ul>
+                    </div>
+                  )}
+
+                  {/* Holidays & Recesses Overview Callout */}
+                  {holidays.length > 0 && (
+                    <div
+                      style={{
+                        background: '#F0FDF4',
+                        border: '1px solid #BBF7D0',
+                        borderRadius: '14px',
+                        padding: '16px 20px',
+                      }}
+                    >
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                        <strong style={{ fontSize: '13px', color: '#166534', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                          🏖️ Identified University Holidays & Recesses ({holidays.length}):
+                        </strong>
+                        <button
+                          onClick={() => setActiveTab('holidays')}
+                          style={{
+                            background: 'none',
+                            border: 'none',
+                            color: '#15803D',
+                            fontSize: '12px',
+                            fontWeight: 700,
+                            cursor: 'pointer',
+                            textDecoration: 'underline',
+                          }}
+                        >
+                          Review & Ingest Holidays →
+                        </button>
+                      </div>
+                      <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                        {holidays.map((h, i) => (
+                          <span
+                            key={i}
+                            style={{
+                              background: '#FFFFFF',
+                              border: '1px solid #86EFAC',
+                              color: '#14532D',
+                              fontSize: '12px',
+                              fontWeight: 600,
+                              padding: '4px 10px',
+                              borderRadius: '8px',
+                            }}
+                          >
+                            🎉 {h.name} {h.start_date ? `(${h.start_date}${h.end_date && h.end_date !== h.start_date ? ` to ${h.end_date}` : ''})` : ''}
+                          </span>
+                        ))}
+                      </div>
                     </div>
                   )}
                 </div>
@@ -756,6 +820,148 @@ export default function ExtractedReviewModal({ isOpen, onClose, uploadId, rawTex
                               <div style={{ fontSize: '12px', color: '#64748B' }}>
                                 {slot.title || 'Lecture'} {slot.location ? `• ${slot.location}` : ''}
                               </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* TAB 5: HOLIDAYS & UNIVERSITY BREAKS */}
+              {activeTab === 'holidays' && (
+                <div
+                  style={{
+                    background: '#FFFFFF',
+                    borderRadius: '14px',
+                    padding: '20px',
+                    border: '1px solid #E2E8F0',
+                  }}
+                >
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '14px' }}>
+                    <div>
+                      <h4 style={{ fontSize: '15px', fontWeight: 700, color: '#0F172A', margin: 0 }}>
+                        Academic Holidays, Recesses & Campus Closures ({holidays.length})
+                      </h4>
+                      <p style={{ margin: '4px 0 0 0', fontSize: '12px', color: '#64748B' }}>
+                        🛡️ LifeSync registers these dates in your calendar. The AI Conflict Resolver will automatically avoid scheduling study sessions on these days and prevent deadline clashes.
+                      </p>
+                    </div>
+                    {holidays.length > 0 && (
+                      <button
+                        onClick={() =>
+                          setSelectedHolidays(
+                            selectedHolidays.length === holidays.length ? [] : holidays.map((_, i) => i)
+                          )
+                        }
+                        style={{
+                          background: 'none',
+                          border: 'none',
+                          color: '#15803D',
+                          fontSize: '12px',
+                          fontWeight: 700,
+                          cursor: 'pointer',
+                          whiteSpace: 'nowrap',
+                          marginLeft: '12px',
+                          padding: '4px 8px',
+                        }}
+                      >
+                        {selectedHolidays.length === holidays.length ? 'Deselect All' : 'Select All'}
+                      </button>
+                    )}
+                  </div>
+
+                  {holidays.length === 0 ? (
+                    <div
+                      style={{
+                        textAlign: 'center',
+                        padding: '48px 20px',
+                        backgroundColor: '#F8FAFC',
+                        borderRadius: '10px',
+                        border: '1px dashed #CBD5E1',
+                      }}
+                    >
+                      <div style={{ fontSize: '32px', marginBottom: '10px' }}>🏖️</div>
+                      <div style={{ fontSize: '14px', fontWeight: 700, color: '#334155', marginBottom: '4px' }}>
+                        No university holidays or campus breaks detected in document.
+                      </div>
+                      <div style={{ fontSize: '12px', color: '#64748B', maxWidth: '420px', margin: '0 auto' }}>
+                        When a syllabus, circular, or academic calendar mentions university breaks, reading days, or recesses, LifeSync will automatically extract and list them here for 1-click calendar sync.
+                      </div>
+                    </div>
+                  ) : (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                      {holidays.map((hol, idx) => {
+                        const isSelected = selectedHolidays.includes(idx);
+                        const formatDateStr = (dStr) => {
+                          if (!dStr) return '';
+                          try {
+                            return new Date(dStr).toLocaleDateString(undefined, {
+                              month: 'short',
+                              day: 'numeric',
+                              year: 'numeric'
+                            });
+                          } catch {
+                            return dStr;
+                          }
+                        };
+                        const dateDisplay = hol.start_date
+                          ? (hol.end_date && hol.end_date !== hol.start_date
+                              ? `${formatDateStr(hol.start_date)} – ${formatDateStr(hol.end_date)}`
+                              : formatDateStr(hol.start_date))
+                          : 'Date to be confirmed';
+
+                        return (
+                          <div
+                            key={idx}
+                            onClick={() => toggleHoliday(idx)}
+                            style={{
+                              display: 'flex',
+                              alignItems: 'flex-start',
+                              gap: '12px',
+                              padding: '14px 16px',
+                              borderRadius: '10px',
+                              border: isSelected ? '1px solid #86EFAC' : '1px solid #E2E8F0',
+                              background: isSelected ? '#F0FDF4' : '#FFFFFF',
+                              cursor: 'pointer',
+                              transition: 'all 0.15s',
+                            }}
+                          >
+                            <input
+                              type="checkbox"
+                              checked={isSelected}
+                              onChange={() => {}}
+                              style={{ marginTop: '3px', cursor: 'pointer' }}
+                            />
+                            <div style={{ flex: 1 }}>
+                              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+                                <span style={{ fontSize: '14px', fontWeight: 700, color: '#166534' }}>
+                                  🎉 {hol.name}
+                                </span>
+                                <span
+                                  style={{
+                                    background: '#DCFCE7',
+                                    color: '#15803D',
+                                    fontSize: '11px',
+                                    fontWeight: 700,
+                                    padding: '2px 8px',
+                                    borderRadius: '6px',
+                                    textTransform: 'capitalize',
+                                  }}
+                                >
+                                  {hol.type || 'University Holiday'}
+                                </span>
+                              </div>
+                              <div style={{ fontSize: '12px', color: '#15803D', display: 'flex', gap: '14px', flexWrap: 'wrap', marginBottom: hol.description ? '4px' : '0' }}>
+                                <span>📅 {dateDisplay}</span>
+                                <span>🛡️ Study Free / Recess Period</span>
+                              </div>
+                              {hol.description && (
+                                <div style={{ fontSize: '12px', color: '#475569' }}>
+                                  {hol.description}
+                                </div>
+                              )}
                             </div>
                           </div>
                         );

@@ -43,6 +43,7 @@ class CommitExtractedRequest(BaseModel):
     assignments: List[Dict[str, Any]] = []
     exams: List[Dict[str, Any]] = []
     events: List[Dict[str, Any]] = []
+    holidays: List[Dict[str, Any]] = []
 
 @router.get("/status")
 async def get_ai_status(
@@ -343,6 +344,53 @@ async def commit_extracted_items(
                     created_events.append(class_event)
             except Exception as parse_err:
                 logger.warning("Error parsing timetable slot %s: %s", ev, parse_err)
+
+    # 4. Commit academic calendar holidays & breaks
+    for hol in getattr(payload, "holidays", []):
+        start_dt = None
+        end_dt = None
+        date_str = hol.get("date") or hol.get("start_date") or hol.get("start_datetime")
+        end_date_str = hol.get("end_date") or hol.get("end_datetime") or date_str
+
+        if date_str:
+            try:
+                start_dt = datetime.fromisoformat(str(date_str).replace("Z", ""))
+                if start_dt.hour == 0 and start_dt.minute == 0:
+                    start_dt = datetime.combine(start_dt.date(), time(0, 0, 0))
+            except Exception:
+                try:
+                    start_dt = datetime.strptime(str(date_str)[:10], "%Y-%m-%d")
+                except Exception:
+                    pass
+
+        if end_date_str:
+            try:
+                end_dt = datetime.fromisoformat(str(end_date_str).replace("Z", ""))
+                if end_dt.hour == 0 and end_dt.minute == 0:
+                    end_dt = datetime.combine(end_dt.date(), time(23, 59, 59))
+            except Exception:
+                try:
+                    d = datetime.strptime(str(end_date_str)[:10], "%Y-%m-%d")
+                    end_dt = datetime.combine(d.date(), time(23, 59, 59))
+                except Exception:
+                    pass
+
+        if start_dt and not end_dt:
+            end_dt = datetime.combine(start_dt.date(), time(23, 59, 59))
+
+        if start_dt and end_dt:
+            holiday_event = Event(
+                user_id=current_user.id,
+                title=hol.get("name") or hol.get("title") or "Academic Holiday",
+                type="holiday",
+                start_datetime=start_dt,
+                end_datetime=end_dt,
+                subject=hol.get("type") or "Holiday",
+                location=hol.get("location") or "Campus",
+                description=hol.get("description") or "Observed University Holiday / Recess"
+            )
+            db.add(holiday_event)
+            created_events.append(holiday_event)
 
     db.commit()
 

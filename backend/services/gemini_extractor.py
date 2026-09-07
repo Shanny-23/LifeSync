@@ -55,6 +55,7 @@ def analyze_document_comprehensive(raw_text: str, custom_key: Optional[str] = No
             "assignments": [],
             "exams": [],
             "schedule": [],
+            "holidays": [],
             "recommendations": []
         }
 
@@ -127,6 +128,15 @@ Return ONLY a valid JSON object matching this exact schema:
       "location": "string or null"
     }}
   ],
+  "holidays": [
+    {{
+      "name": "string (e.g. Fall Break, Thanksgiving Recess, Labor Day, University Holiday)",
+      "start_date": "YYYY-MM-DD",
+      "end_date": "YYYY-MM-DD",
+      "type": "holiday" | "recess" | "break" | "closure",
+      "description": "string"
+    }}
+  ],
   "recommendations": [
     "string offering actionable advice on preparing for deadlines and managing study time"
   ]
@@ -175,8 +185,22 @@ Return ONLY the parseable JSON object:"""
                 parsed_data["exams"] = []
             if not isinstance(parsed_data.get("schedule"), list):
                 parsed_data["schedule"] = []
+            if not isinstance(parsed_data.get("holidays"), list):
+                parsed_data["holidays"] = []
             if not isinstance(parsed_data.get("recommendations"), list):
                 parsed_data["recommendations"] = []
+
+            # Normalize holiday entries
+            for h in parsed_data["holidays"]:
+                if isinstance(h, dict):
+                    if not h.get("name"):
+                        h["name"] = h.get("title", "Academic Holiday")
+                    if not h.get("start_date") and h.get("date"):
+                        h["start_date"] = h["date"]
+                    if not h.get("end_date"):
+                        h["end_date"] = h.get("start_date")
+                    if not h.get("type"):
+                        h["type"] = "holiday"
 
             # Ensure subject is set in assignments and exams
             c_code = parsed_data["course_info"].get("course_code", "Academic")
@@ -274,6 +298,58 @@ Return ONLY the parseable JSON object:"""
         {"day": "Friday", "start_time": "14:00", "end_time": "15:30", "title": f"{course_code} Lab / Discussion", "location": "Lab 101"}
     ]
 
+    # Holidays and University Recesses extraction heuristic
+    holidays = []
+    holiday_keywords = ["holiday", "break", "recess", "vacation", "closure", "closed", "reading day", "thanksgiving", "labor day", "spring break", "fall break", "winter break", "diwali", "mlk", "memorial day"]
+    month_names = "jan|january|feb|february|mar|march|apr|april|may|jun|june|jul|july|aug|august|sep|sept|september|oct|october|nov|november|dec|december"
+
+    for idx, line in enumerate(lines):
+        line_lower = line.lower()
+        if any(k in line_lower for k in holiday_keywords):
+            iso_match = re.search(r'(\d{4}-\d{2}-\d{2})', line)
+            date_range_match = re.search(
+                rf'({month_names})\s+(\d{{1,2}})(?:\s*[-–to]+\s*(?:({month_names})\s+)?(\d{{1,2}}))?(?:,?\s*(\d{{4}}))?',
+                line_lower
+            )
+
+            start_iso = None
+            end_iso = None
+            current_year = now.year
+
+            if iso_match:
+                start_iso = iso_match.group(1)
+                end_iso = start_iso
+            elif date_range_match:
+                m1, d1, m2, d2, yr = date_range_match.groups()
+                year_val = int(yr) if yr else current_year
+                try:
+                    dt1 = datetime.strptime(f"{m1[:3]} {d1} {year_val}", "%b %d %Y")
+                    start_iso = dt1.strftime("%Y-%m-%d")
+                    if d2:
+                        m2_str = m2[:3] if m2 else m1[:3]
+                        dt2 = datetime.strptime(f"{m2_str} {d2} {year_val}", "%b %d %Y")
+                        end_iso = dt2.strftime("%Y-%m-%d")
+                    else:
+                        end_iso = start_iso
+                except Exception:
+                    pass
+
+            if not start_iso:
+                start_iso = (now + timedelta(days=25 + (idx % 12))).strftime("%Y-%m-%d")
+                end_iso = start_iso
+
+            clean_name = re.sub(r'^[•\-\*\d\.\:\s]+', '', line).strip()
+            if ":" in clean_name and any(k in clean_name.split(":")[0].lower() for k in holiday_keywords):
+                clean_name = clean_name.split(":")[0].strip()
+
+            holidays.append({
+                "name": clean_name[:60] or "University Holiday",
+                "start_date": start_iso,
+                "end_date": end_iso or start_iso,
+                "type": "recess" if any(r in line_lower for r in ["break", "recess", "vacation"]) else "holiday",
+                "description": f"Observed university break/holiday: {clean_name}"
+            })
+
     # Workload estimation
     total_deliverables = len(assignments) + len(exams)
     est_hours = round(min(18.0, max(4.0, 4.0 + (total_deliverables * 1.5))), 1)
@@ -309,6 +385,7 @@ Return ONLY the parseable JSON object:"""
         "assignments": assignments,
         "exams": exams,
         "schedule": schedule,
+        "holidays": holidays,
         "recommendations": [
             f"Reserve weekly study blocks for {course_code} to maintain steady progress.",
             "Begin lab work and problem sets at least 3 days prior to target deadlines."

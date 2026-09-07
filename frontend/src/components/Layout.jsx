@@ -1,7 +1,5 @@
-import { useState } from 'react';
 import { Outlet, useLocation, Link } from 'react-router-dom';
 import Sidebar from './Sidebar';
-import FigmaAppShell from './FigmaAppShell';
 import { useToast } from '../context/ToastContext';
 import { useAuth } from '../context/AuthContext';
 
@@ -10,19 +8,6 @@ export default function Layout() {
   const toast = useToast();
   const { user, loginWithGoogle, openAuthModal } = useAuth();
   const isLanding = location.pathname === '/landing';
-
-  // Toggle between 1:1 Figma Mobile View and Desktop Workspace
-  const [isFigmaMobileMode, setIsFigmaMobileMode] = useState(false);
-
-  const toggleViewMode = () => {
-    const next = !isFigmaMobileMode;
-    setIsFigmaMobileMode(next);
-    if (next) {
-      toast.info('📱 Switched to 1:1 Figma Mobile App Preview Mode');
-    } else {
-      toast.info('💻 Switched to Expanded Desktop Workspace');
-    }
-  };
 
   if (isLanding) {
     return (
@@ -118,16 +103,6 @@ export default function Layout() {
           </div>
 
           <div className="topbar-actions" style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-            {/* View Switcher Button */}
-            <button
-              type="button"
-              className={`figma-mode-toggle ${isFigmaMobileMode ? 'active' : ''}`}
-              onClick={toggleViewMode}
-              title="Toggle between 1:1 Figma Mobile View and Full Desktop Workspace"
-            >
-              {isFigmaMobileMode ? '💻 Expanded Workspace' : '📱 Figma Mobile View'}
-            </button>
-
             <Link to="/upload" className="btn btn-pale btn-sm">
               📤 Upload Documents
             </Link>
@@ -137,12 +112,8 @@ export default function Layout() {
           </div>
         </header>
 
-        {/* Conditional rendering: 1:1 Figma Mobile Frame or standard Page Content */}
-        {isFigmaMobileMode ? (
-          <FigmaAppShell />
-        ) : (
-          <Outlet />
-        )}
+        {/* Standard Page Workspace Content */}
+        <Outlet />
       </div>
     </div>
   );

@@ -678,24 +678,53 @@ h1, h2, h3, h4, h5, h6 {
   width: 44px;
   height: 52px;
   border-radius: var(--radius-md);
-  border: 1px solid transparent;
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+  color: #1E293B;
   cursor: pointer;
   transition: all 0.15s ease;
   position: relative;
+  user-select: none;
 }
 
 .week-day-pill:hover {
   background: var(--color-neutral-subtle);
+  border-color: var(--color-border-dark);
 }
 
-.week-day-pill.today {
-  background: var(--color-forest);
-  color: #FFFFFF;
-  box-shadow: var(--shadow-sm);
+.week-day-pill.selected {
+  background: var(--color-forest) !important;
+  color: #FFFFFF !important;
+  border-color: var(--color-forest) !important;
+  box-shadow: 0 3px 8px rgba(20, 56, 42, 0.22);
 }
 
-.week-day-pill.today .day-name {
-  color: #A7F3D0;
+.week-day-pill.selected .day-name {
+  color: #A7F3D0 !important;
+}
+
+.week-day-pill.selected .day-num {
+  color: #FFFFFF !important;
+}
+
+.week-day-pill.selected .day-dot {
+  background: #34D399 !important;
+}
+
+.week-day-pill.today:not(.selected) {
+  background: #E7F0EA;
+  border: 1.5px solid var(--color-forest);
+  color: var(--color-forest);
+}
+
+.week-day-pill.today:not(.selected) .day-name {
+  color: #1F5C3D;
+  font-weight: 700;
+}
+
+.week-day-pill.today:not(.selected) .day-num {
+  color: var(--color-forest);
+  font-weight: 800;
 }
 
 .week-day-pill .day-name {
@@ -703,12 +732,20 @@ h1, h2, h3, h4, h5, h6 {
   font-weight: 600;
   text-transform: uppercase;
   color: var(--color-neutral);
+  letter-spacing: 0.02em;
+  line-height: 1;
+  margin-bottom: 3px;
 }
 
 .week-day-pill .day-num {
-  font-size: 1.05rem;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Inter", "Plus Jakarta Sans", sans-serif;
+  font-size: 1.12rem;
   font-weight: 700;
-  line-height: 1.1;
+  line-height: 1;
+  font-variant-numeric: tabular-nums lining-nums;
+  font-feature-settings: "lnum" 1, "tnum" 1;
+  letter-spacing: -0.01em;
+  color: inherit;
 }
 
 .week-day-pill .day-dot {
@@ -717,11 +754,7 @@ h1, h2, h3, h4, h5, h6 {
   border-radius: 50%;
   background: var(--color-working-green);
   position: absolute;
-  bottom: 5px;
-}
-
-.week-day-pill.today .day-dot {
-  background: #FFFFFF;
+  bottom: 4px;
 }
 
 /* ==========================================================================
