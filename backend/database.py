@@ -48,27 +48,29 @@ def ensure_db_schema():
     with engine.connect() as conn:
         inspector = inspect(engine)
         table_names = inspector.get_table_names()
-        if "uploads" in table_names:
-            columns = [col["name"] for col in inspector.get_columns("uploads")]
-            if "raw_text" not in columns:
-                conn.execute(text("ALTER TABLE uploads ADD COLUMN raw_text TEXT"))
-                conn.commit()
-            if "error_message" not in columns:
-                conn.execute(text("ALTER TABLE uploads ADD COLUMN error_message TEXT"))
-                conn.commit()
-        if "tasks" in table_names:
-            columns = [col["name"] for col in inspector.get_columns("tasks")]
-            if "priority_score" not in columns:
-                conn.execute(text("ALTER TABLE tasks ADD COLUMN priority_score INTEGER DEFAULT 50"))
-                conn.commit()
-        if "events" in table_names:
-            columns = [col["name"] for col in inspector.get_columns("events")]
-            if "weightage" not in columns:
-                conn.execute(text("ALTER TABLE events ADD COLUMN weightage VARCHAR(50)"))
-                conn.commit()
-        if "scheduled_slots" in table_names:
-            columns = [col["name"] for col in inspector.get_columns("scheduled_slots")]
-            if "slot_type" not in columns:
-                conn.execute(text("ALTER TABLE scheduled_slots ADD COLUMN slot_type VARCHAR(50) DEFAULT 'regular'"))
-                conn.commit()
+        
+        # Helper to safely add column if missing
+        def add_column_if_missing(table, col_name, col_type):
+            if table in table_names:
+                cols = [c["name"] for c in inspector.get_columns(table)]
+                if col_name not in cols:
+                    conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {col_name} {col_type}"))
+                    conn.commit()
+
+        add_column_if_missing("uploads", "raw_text", "TEXT")
+        add_column_if_missing("uploads", "error_message", "TEXT")
+        add_column_if_missing("uploads", "user_id", "INTEGER REFERENCES users(id)")
+
+        add_column_if_missing("tasks", "priority_score", "INTEGER DEFAULT 50")
+        add_column_if_missing("tasks", "user_id", "INTEGER REFERENCES users(id)")
+
+        add_column_if_missing("events", "weightage", "VARCHAR(50)")
+        add_column_if_missing("events", "user_id", "INTEGER REFERENCES users(id)")
+
+        add_column_if_missing("scheduled_slots", "slot_type", "VARCHAR(50) DEFAULT 'regular'")
+        add_column_if_missing("scheduled_slots", "user_id", "INTEGER REFERENCES users(id)")
+
+        add_column_if_missing("courses", "user_id", "INTEGER REFERENCES users(id)")
+        add_column_if_missing("focus_sessions", "user_id", "INTEGER REFERENCES users(id)")
+
 

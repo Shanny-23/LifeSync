@@ -14,6 +14,7 @@ from schemas import (
 )
 from services.scheduler import generate_ai_schedule
 from services.conflict_resolver import resolve_schedule_conflicts
+from services.auth_service import get_current_user
 
 router = APIRouter(tags=["Schedule"])
 
@@ -61,7 +62,8 @@ def get_schedule(
         None,
         description="Filter by slot_type ('regular' or 'study_session')"
     ),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
 ):
     """
     Returns scheduled slots joined with parent task details.
@@ -106,6 +108,7 @@ def get_schedule(
     query = (
         db.query(models.ScheduledSlot, models.Task)
         .outerjoin(models.Task, models.ScheduledSlot.task_id == models.Task.id)
+        .filter(models.ScheduledSlot.user_id == current_user.id)
     )
 
     if status_filter and status_filter.lower() != "all":
@@ -129,7 +132,7 @@ def get_schedule(
     event_lookup = {}
     if rows:
         dates = {slot.scheduled_date for slot, _ in rows}
-        all_events = db.query(models.Event).all()
+        all_events = db.query(models.Event).filter(models.Event.user_id == current_user.id).all()
         for ev in all_events:
             if ev.start_datetime:
                 d_str = ev.start_datetime.strftime("%Y-%m-%d")
@@ -194,11 +197,14 @@ def get_schedule(
 )
 def list_conflict_logs(
     limit: int = 50,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
 ):
-    """Retrieve audit records from the conflict_log table."""
+    """Retrieve audit records from the conflict_log table for current user."""
     records = (
         db.query(models.ConflictLog)
+        .join(models.ScheduledSlot, models.ConflictLog.slot_id == models.ScheduledSlot.id)
+        .filter(models.ScheduledSlot.user_id == current_user.id)
         .order_by(models.ConflictLog.created_at.desc())
         .limit(limit)
         .all()
@@ -211,12 +217,16 @@ def list_conflict_logs(
     response_model=FrontendSlotDetail,
     summary="Get a single scheduled slot by ID"
 )
-def get_slot_by_id(slot_id: int, db: Session = Depends(get_db)):
+def get_slot_by_id(
+    slot_id: int,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
     """Retrieve a single scheduled slot with joined task details."""
     row = (
         db.query(models.ScheduledSlot, models.Task)
         .outerjoin(models.Task, models.ScheduledSlot.task_id == models.Task.id)
-        .filter(models.ScheduledSlot.id == slot_id)
+        .filter(models.ScheduledSlot.id == slot_id, models.ScheduledSlot.user_id == current_user.id)
         .first()
     )
     if not row:
@@ -235,7 +245,10 @@ def get_slot_by_id(slot_id: int, db: Session = Depends(get_db)):
     if task and task.subject:
         matched_ev = (
             db.query(models.Event)
-            .filter(models.Event.subject.ilike(f"%{task.subject.strip()}%"))
+            .filter(
+                models.Event.subject.ilike(f"%{task.subject.strip()}%"),
+                models.Event.user_id == current_user.id
+            )
             .first()
         )
     event_id = matched_ev.id if matched_ev else None
@@ -274,11 +287,12 @@ def get_slot_by_id(slot_id: int, db: Session = Depends(get_db)):
 )
 def generate_schedule(
     days_ahead: int = 7,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
 ):
     """Triggers the AI scheduling engine and conflict resolver for pending tasks."""
     try:
-        result = generate_ai_schedule(db=db, days_ahead=days_ahead)
+        result = generate_ai_schedule(db=db, days_ahead=days_ahead, user_id=current_user.id)
         return ScheduleGenerationResponse(**result)
     except RuntimeError as r_err:
         raise HTTPException(
@@ -304,11 +318,12 @@ def generate_schedule(
 )
 def resolve_conflicts_endpoint(
     days_ahead: int = 7,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
 ):
     """Scans all active scheduled slots for collisions against fests, holidays, and club events."""
     try:
-        results = resolve_schedule_conflicts(db=db, days_ahead=days_ahead)
+        results = resolve_schedule_conflicts(db=db, days_ahead=days_ahead, user_id=current_user.id)
         return ConflictResolutionResult(**results)
     except Exception as exc:
         raise HTTPException(

@@ -4,14 +4,22 @@ import re
 from datetime import datetime, date, time, timedelta, timezone
 from typing import Any, Optional
 from dotenv import load_dotenv
+import logging
 import anthropic
 from pydantic import ValidationError
 from sqlalchemy.orm import Session
 
 import models
 from schemas import ScheduledSlotItem
+from services.groq_service import (
+    call_groq_chat,
+    clean_groq_json_response,
+    get_groq_api_key,
+    REASONING_MODEL
+)
 
 load_dotenv()
+logger = logging.getLogger(__name__)
 
 MODEL_NAME = os.getenv("ANTHROPIC_MODEL", "claude-sonnet-4-6")
 
@@ -102,7 +110,7 @@ def compute_daily_free_slots(
     return free_slots
 
 
-def get_schedule_context(db: Session, days_ahead: int = 7) -> dict[str, Any]:
+def get_schedule_context(db: Session, days_ahead: int = 7, user_id: Optional[int] = None) -> dict[str, Any]:
     """
     Gathers fixed classes, computes free time gaps per day, and prepares pending tasks
     ordered by priority score.
@@ -112,15 +120,17 @@ def get_schedule_context(db: Session, days_ahead: int = 7) -> dict[str, Any]:
     end_date = start_date + timedelta(days=days_ahead)
 
     # 1. Query fixed timetable classes & events in range
-    class_events = (
+    class_events_query = (
         db.query(models.Event)
         .filter(
             models.Event.type.in_(["class", "class_session"]),
             models.Event.start_datetime >= datetime.combine(start_date, time(0, 0)),
             models.Event.start_datetime <= datetime.combine(end_date, time(23, 59))
         )
-        .all()
     )
+    if user_id is not None:
+        class_events_query = class_events_query.filter(models.Event.user_id == user_id)
+    class_events = class_events_query.all()
 
     # Group busy intervals by date
     daily_busy: dict[date, list[tuple[time, time]]] = {}
@@ -158,11 +168,13 @@ def get_schedule_context(db: Session, days_ahead: int = 7) -> dict[str, Any]:
             })
 
     # 3. Query pending tasks and calculate priority scores
-    pending_tasks = (
+    pending_tasks_query = (
         db.query(models.Task)
         .filter(models.Task.status == "pending")
-        .all()
     )
+    if user_id is not None:
+        pending_tasks_query = pending_tasks_query.filter(models.Task.user_id == user_id)
+    pending_tasks = pending_tasks_query.all()
 
     tasks_summary = []
     for t in pending_tasks:
@@ -199,13 +211,13 @@ def clean_model_json(text: str) -> str:
     return cleaned.strip()
 
 
-def generate_ai_schedule(db: Session, days_ahead: int = 7) -> dict[str, Any]:
+def generate_ai_schedule(db: Session, days_ahead: int = 7, user_id: Optional[int] = None) -> dict[str, Any]:
     """
     Generates an optimized schedule using Claude, Gemini, or an intelligent local heuristic scheduler.
     Fits pending tasks into computed free slots before deadlines, validates the plan,
     and inserts slots into 'scheduled_slots' table.
     """
-    context = get_schedule_context(db, days_ahead=days_ahead)
+    context = get_schedule_context(db, days_ahead=days_ahead, user_id=user_id)
     pending_tasks = context["tasks"]
 
     if not pending_tasks:
@@ -218,7 +230,7 @@ def generate_ai_schedule(db: Session, days_ahead: int = 7) -> dict[str, Any]:
 
     parsed_slots = None
     anthropic_key = os.getenv("ANTHROPIC_API_KEY")
-    gemini_key = os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
+    groq_key = get_groq_api_key()
 
     system_prompt = (
         "You are an expert AI academic scheduler and study planner. "
@@ -253,7 +265,22 @@ Generate the schedule. Return ONLY the JSON array matching:
   }}
 ]"""
 
-    # 1. Try Anthropic Claude
+    # 1. Try Groq with DeepSeek-R1 Distill (multi-constraint reasoning model)
+    if groq_key and not parsed_slots:
+        try:
+            raw_output = call_groq_chat(
+                prompt=f"{system_prompt}\n\n{user_prompt}",
+                model=REASONING_MODEL,
+                temperature=0.0,
+                custom_key=groq_key
+            )
+            cleaned_json = clean_groq_json_response(raw_output)
+            parsed_slots = json.loads(cleaned_json)
+        except Exception as e:
+            logger.warning("Groq AI scheduler error: %s. Using fallback.", e)
+            parsed_slots = None
+
+    # 2. Try Anthropic Claude
     if anthropic_key and not parsed_slots:
         try:
             client = anthropic.Anthropic(api_key=anthropic_key)
@@ -265,20 +292,6 @@ Generate the schedule. Return ONLY the JSON array matching:
                 messages=[{"role": "user", "content": user_prompt}]
             )
             raw_output = response.content[0].text
-            parsed_slots = json.loads(clean_model_json(raw_output))
-        except Exception:
-            parsed_slots = None
-
-    # 2. Try Google Gemini
-    if gemini_key and not parsed_slots:
-        try:
-            from google import genai
-            g_client = genai.Client(api_key=gemini_key)
-            g_resp = g_client.models.generate_content(
-                model='gemini-2.5-flash',
-                contents=f"{system_prompt}\n\n{user_prompt}",
-            )
-            raw_output = g_resp.text
             parsed_slots = json.loads(clean_model_json(raw_output))
         except Exception:
             parsed_slots = None
@@ -376,6 +389,7 @@ Generate the schedule. Return ONLY the JSON array matching:
 
         new_slot = models.ScheduledSlot(
             task_id=vs.task_id,
+            user_id=user_id,
             scheduled_date=vs.scheduled_date,
             start_time=vs.scheduled_start_time,
             end_time=vs.scheduled_end_time,
@@ -390,7 +404,7 @@ Generate the schedule. Return ONLY the JSON array matching:
 
     # Conflict Resolver Step: Check slots against events (fests, holidays, club events)
     from services.conflict_resolver import resolve_schedule_conflicts
-    conflict_result = resolve_schedule_conflicts(db=db, days_ahead=days_ahead)
+    conflict_result = resolve_schedule_conflicts(db=db, days_ahead=days_ahead, user_id=user_id)
 
     results = []
     for slot_obj, task_obj in created_slots:

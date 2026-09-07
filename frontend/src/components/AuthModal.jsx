@@ -2,7 +2,15 @@ import React from 'react';
 import { useAuth } from '../context/AuthContext';
 
 export default function AuthModal() {
-  const { isAuthModalOpen, closeAuthModal, user, availableProfiles, loginWithDemo, loginWithGoogle, loading } = useAuth();
+  const {
+    isAuthModalOpen,
+    closeAuthModal,
+    user,
+    availableProfiles = [],
+    loginWithDemo,
+    loginWithGoogle,
+    loading
+  } = useAuth();
 
   if (!isAuthModalOpen) return null;
 
@@ -54,18 +62,19 @@ export default function AuthModal() {
                 textTransform: 'uppercase'
               }}
             >
-              Firebase Authentication
+              Google & Multi-Tenant Identity
             </span>
           </div>
           <h2 style={{ fontSize: '20px', fontWeight: 700, margin: 0 }}>
             Sign In to LifeSync
           </h2>
           <p style={{ margin: '6px 0 0 0', fontSize: '13px', color: '#D1E0D7' }}>
-            Multi-tenant identity, synced schedules, and AI ingestion
+            Multi-tenant identity, synced academic schedules, and AI ingestion
           </p>
 
           <button
             onClick={closeAuthModal}
+            aria-label="Close modal"
             style={{
               position: 'absolute',
               top: '20px',
@@ -84,54 +93,92 @@ export default function AuthModal() {
 
         {/* Content Body */}
         <div style={{ padding: '24px 28px' }}>
-          {/* Current Active Account Card */}
-          <div
-            style={{
-              backgroundColor: '#F4F7F5',
-              border: '1px solid #E2EAE5',
-              borderRadius: '12px',
-              padding: '14px 16px',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '14px',
-              marginBottom: '20px'
-            }}
-          >
-            <img
-              src={user?.avatar || "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150"}
-              alt={user?.name}
+          {/* Current Active Account Card or Get Started Card */}
+          {user ? (
+            <div
               style={{
-                width: '44px',
-                height: '44px',
-                borderRadius: '50%',
-                objectFit: 'cover',
-                border: '2px solid #1F5C3D'
-              }}
-            />
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ fontSize: '11px', fontWeight: 600, color: '#1F5C3D', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                Active Session
-              </div>
-              <div style={{ fontSize: '15px', fontWeight: 600, color: '#111827', truncate: true }}>
-                {user?.name}
-              </div>
-              <div style={{ fontSize: '12px', color: '#6B7280' }}>
-                {user?.email}
-              </div>
-            </div>
-            <span
-              style={{
-                backgroundColor: '#E7F0EA',
-                color: '#1F5C3D',
-                padding: '4px 8px',
-                borderRadius: '6px',
-                fontSize: '11px',
-                fontWeight: 600
+                backgroundColor: '#F4F7F5',
+                border: '1px solid #E2EAE5',
+                borderRadius: '12px',
+                padding: '14px 16px',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '14px',
+                marginBottom: '20px'
               }}
             >
-              Connected
-            </span>
-          </div>
+              <img
+                src={user.avatar || user.picture_url || "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150"}
+                alt={user.name || 'User'}
+                style={{
+                  width: '44px',
+                  height: '44px',
+                  borderRadius: '50%',
+                  objectFit: 'cover',
+                  border: '2px solid #1F5C3D'
+                }}
+              />
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: '11px', fontWeight: 600, color: '#1F5C3D', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                  Active Session
+                </div>
+                <div style={{ fontSize: '15px', fontWeight: 600, color: '#111827', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {user.name || 'Student Account'}
+                </div>
+                <div style={{ fontSize: '12px', color: '#6B7280', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {user.email || user.major || 'Authenticated'}
+                </div>
+              </div>
+              <span
+                style={{
+                  backgroundColor: '#E7F0EA',
+                  color: '#1F5C3D',
+                  padding: '4px 8px',
+                  borderRadius: '6px',
+                  fontSize: '11px',
+                  fontWeight: 600
+                }}
+              >
+                Connected
+              </span>
+            </div>
+          ) : (
+            <div
+              style={{
+                backgroundColor: '#F8FAFC',
+                border: '1px dashed #CBD5E1',
+                borderRadius: '12px',
+                padding: '14px 16px',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '12px',
+                marginBottom: '20px'
+              }}
+            >
+              <div
+                style={{
+                  width: '38px',
+                  height: '38px',
+                  borderRadius: '50%',
+                  background: '#E2E8F0',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  fontSize: '18px'
+                }}
+              >
+                🎓
+              </div>
+              <div>
+                <div style={{ fontSize: '13px', fontWeight: 600, color: '#1E293B' }}>
+                  Not Signed In
+                </div>
+                <div style={{ fontSize: '12px', color: '#64748B' }}>
+                  Choose Google or pick a student demo profile below.
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Google Sign In Button */}
           <button
@@ -195,7 +242,7 @@ export default function AuthModal() {
           {/* Student Demo Persona Selection */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
             {availableProfiles.map((p) => {
-              const isSelected = user?.uid === p.uid;
+              const isSelected = user?.uid === p.uid || user?.email === p.email;
               return (
                 <div
                   key={p.uid}

@@ -67,7 +67,8 @@ def is_event_overlapping(
 
 def find_conflicting_event(
     slot: models.ScheduledSlot,
-    db: Session
+    db: Session,
+    user_id: Optional[int] = None
 ) -> Optional[models.Event]:
     """
     Checks if the scheduled slot overlaps with any blocking event in 'events'
@@ -83,14 +84,16 @@ def find_conflicting_event(
         return None
 
     # Query events that could overlap (fests, holidays, club events)
-    blocking_events = (
+    blocking_events_query = (
         db.query(models.Event)
         .filter(
             models.Event.type.in_(["fest", "holiday", "club_event", "event"]),
             models.Event.status != "cancelled"
         )
-        .all()
     )
+    if user_id is not None:
+        blocking_events_query = blocking_events_query.filter(models.Event.user_id == user_id)
+    blocking_events = blocking_events_query.all()
 
     for ev in blocking_events:
         if is_event_overlapping(slot_start, slot_end, ev):
@@ -102,7 +105,8 @@ def find_conflicting_event(
 def compute_non_conflicting_free_slots(
     db: Session,
     days_ahead: int = 7,
-    exclude_slot_id: Optional[int] = None
+    exclude_slot_id: Optional[int] = None,
+    user_id: Optional[int] = None
 ) -> list[dict[str, Any]]:
     """
     Computes all free time slots over the scheduling horizon that do NOT overlap
@@ -121,15 +125,17 @@ def compute_non_conflicting_free_slots(
         daily_busy[today + timedelta(days=i)] = []
 
     # 1. Classes and all blocking events in range
-    events = (
+    events_query = (
         db.query(models.Event)
         .filter(
             models.Event.start_datetime >= datetime.combine(today, time(0, 0)),
             models.Event.start_datetime <= datetime.combine(end_date, time(23, 59)),
             models.Event.status != "cancelled"
         )
-        .all()
     )
+    if user_id is not None:
+        events_query = events_query.filter(models.Event.user_id == user_id)
+    events = events_query.all()
 
     for ev in events:
         if not ev.start_datetime:
@@ -155,6 +161,8 @@ def compute_non_conflicting_free_slots(
 
     # 2. Already active scheduled slots (exclude the slot currently in conflict)
     active_slots_query = db.query(models.ScheduledSlot).filter(models.ScheduledSlot.status == "active")
+    if user_id is not None:
+        active_slots_query = active_slots_query.filter(models.ScheduledSlot.user_id == user_id)
     if exclude_slot_id:
         active_slots_query = active_slots_query.filter(models.ScheduledSlot.id != exclude_slot_id)
     active_slots = active_slots_query.all()
@@ -188,7 +196,8 @@ def find_alternate_slot_for_task(
     task: models.Task,
     conflicted_slot: models.ScheduledSlot,
     db: Session,
-    days_ahead: int = 7
+    days_ahead: int = 7,
+    user_id: Optional[int] = None
 ) -> Optional[dict[str, str]]:
     """
     Attempts to find an alternate non-overlapping free slot for a conflicted task before its deadline.
@@ -197,7 +206,8 @@ def find_alternate_slot_for_task(
     free_slots_by_day = compute_non_conflicting_free_slots(
         db=db,
         days_ahead=days_ahead,
-        exclude_slot_id=conflicted_slot.id
+        exclude_slot_id=conflicted_slot.id,
+        user_id=user_id
     )
 
     if not free_slots_by_day:
@@ -280,7 +290,8 @@ Return ONLY JSON matching:
 
 def resolve_schedule_conflicts(
     db: Session,
-    days_ahead: int = 7
+    days_ahead: int = 7,
+    user_id: Optional[int] = None
 ) -> dict[str, Any]:
     """
     Checks each active entry in 'scheduled_slots' against the 'events' table
@@ -289,11 +300,13 @@ def resolve_schedule_conflicts(
     - Re-runs conflicted tasks to find an alternate slot before deadline.
     - Logs every resolution action to the 'conflict_log' table.
     """
-    active_slots = (
+    active_slots_query = (
         db.query(models.ScheduledSlot)
         .filter(models.ScheduledSlot.status == "active")
-        .all()
     )
+    if user_id is not None:
+        active_slots_query = active_slots_query.filter(models.ScheduledSlot.user_id == user_id)
+    active_slots = active_slots_query.all()
 
     conflicts_detected = 0
     conflicts_rescheduled = 0
@@ -301,7 +314,7 @@ def resolve_schedule_conflicts(
     logs_created = []
 
     for slot in active_slots:
-        conflicting_ev = find_conflicting_event(slot, db)
+        conflicting_ev = find_conflicting_event(slot, db, user_id=user_id)
         if not conflicting_ev:
             continue
 
@@ -320,7 +333,8 @@ def resolve_schedule_conflicts(
                 task=task,
                 conflicted_slot=slot,
                 db=db,
-                days_ahead=days_ahead
+                days_ahead=days_ahead,
+                user_id=user_id
             )
 
         if alt_slot:

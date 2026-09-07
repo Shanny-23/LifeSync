@@ -169,9 +169,9 @@ print(" -> Switched to Demo Persona:", demo_login_res["user"]["name"], f"(Major:
 assert demo_login_res["token"] == "demo-token-demo_user_2"
 
 # -------------------------------------------------------------
-# STEP 8: Google Gemini AI Copilot & Document Extraction Preview
+# STEP 8: Groq AI Copilot & Document Extraction Preview
 # -------------------------------------------------------------
-print("\n[STEP 8] Testing Gemini AI Scheduling Copilot & Ingestion...")
+print("\n[STEP 8] Testing Groq AI Scheduling Copilot & Ingestion...")
 copilot_res = requests.post(f"{BASE_URL}/api/ai/copilot", json={
     "prompt": "Schedule 2 hours study session for CS450 Distributed Systems on Friday at 4pm"
 }).json()

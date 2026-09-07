@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 from database import get_db
 import models
 from schemas import FrontendEventDetail
+from services.auth_service import get_current_user
 
 router = APIRouter(tags=["Events"])
 
@@ -42,10 +43,11 @@ def get_events(
         alias="to",
         description="Filter events up to date (format: YYYY-MM-DD)"
     ),
+    current_user: models.User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """
-    Returns calendar events (holidays, fests, club events, class sessions).
+    Returns calendar events for the authenticated user.
     Supports filtering by type, subject/category, and date ranges.
     """
     # 1. Validate date filters
@@ -83,8 +85,8 @@ def get_events(
             detail=f"'from' date ({from_date}) cannot be after 'to' date ({to_date})."
         )
 
-    # 2. Build query
-    query = db.query(models.Event)
+    # 2. Build query scoped to current user
+    query = db.query(models.Event).filter(models.Event.user_id == current_user.id)
 
     if type_filter and type_filter.lower() != "all":
         # Handle 'class' vs 'class_session'
@@ -136,9 +138,16 @@ def get_events(
     response_model=FrontendEventDetail,
     summary="Get a single event by ID"
 )
-def get_event_by_id(event_id: int, db: Session = Depends(get_db)):
-    """Retrieve a single event by ID. Returns 404 if not found."""
-    ev = db.query(models.Event).filter(models.Event.id == event_id).first()
+def get_event_by_id(
+    event_id: int,
+    current_user: models.User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Retrieve a single event by ID for the authenticated user."""
+    ev = db.query(models.Event).filter(
+        models.Event.id == event_id,
+        models.Event.user_id == current_user.id
+    ).first()
     if not ev:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,

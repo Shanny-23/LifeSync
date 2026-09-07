@@ -7,6 +7,8 @@ import NewTaskModal from '../components/NewTaskModal';
 import TaskDetailModal from '../components/TaskDetailModal';
 import FocusTimerWidget from '../components/FocusTimerWidget';
 import SyllabusMasteryCard from '../components/SyllabusMasteryCard';
+import ReadinessGauge from '../components/ReadinessGauge';
+import WeeklyStudyChart from '../components/WeeklyStudyChart';
 import { getTasks, recalculatePriorities } from '../api';
 import { useToast } from '../context/ToastContext';
 
@@ -227,6 +229,12 @@ export default function Dashboard() {
 
         {/* 1. At a Glance Metrics Row */}
         <AtAGlanceMetrics tasks={tasks} />
+
+        {/* 1.5 Figma Academic Readiness & Weekly Study Breakdown Grid */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '16px', margin: '8px 0' }}>
+          <ReadinessGauge score={73} />
+          <WeeklyStudyChart />
+        </div>
 
         {/* 2. Urgent Priorities List */}
         <div className="collab-card">

@@ -12,21 +12,26 @@ from services.priority import calculate_task_priority
 from services.scheduler import generate_ai_schedule
 from services.conflict_resolver import resolve_schedule_conflicts
 from services.exam_planner import generate_exam_study_plan
+from services.groq_service import (
+    call_groq_chat,
+    clean_groq_json_response,
+    get_groq_api_key,
+    EXTRACTION_MODEL,
+    REASONING_MODEL
+)
 
 load_dotenv()
 logger = logging.getLogger(__name__)
 
-def get_gemini_api_key(custom_key: Optional[str] = None) -> Optional[str]:
-    """Retrieve Gemini API key from explicit param, environment, or .env file."""
-    if custom_key and custom_key.strip():
-        return custom_key.strip()
-    return os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
+# Backward-compatible alias for existing imports
+get_gemini_api_key = get_groq_api_key
 
 
 def extract_academic_items_with_gemini(raw_text: str, custom_key: Optional[str] = None) -> Dict[str, Any]:
     """
     Extract structured course details, assignments, and exams from syllabus/schedule text.
-    Uses Google GenAI SDK if API key is present; otherwise falls back gracefully to rule-based parser.
+    Uses Groq's fast extraction model ('llama-3.3-70b-versatile') via OpenAI-compatible SDK
+    if API key is present; otherwise falls back gracefully to rule-based parser.
     """
     if not raw_text or not raw_text.strip():
         return {
@@ -37,14 +42,11 @@ def extract_academic_items_with_gemini(raw_text: str, custom_key: Optional[str] 
             "schedule": []
         }
 
-    api_key = get_gemini_api_key(custom_key)
+    api_key = get_groq_api_key(custom_key)
 
     if api_key:
         try:
-            from google import genai
-            client = genai.Client(api_key=api_key)
-            prompt = f"""
-You are an expert academic syllabus and schedule extractor for LifeSync.
+            prompt = f"""You are an expert academic syllabus and schedule extractor for LifeSync.
 Analyze the following text and extract all course details, assignments, exams, and weekly lecture schedules.
 Respond ONLY with a valid JSON object matching this schema:
 {{
@@ -82,23 +84,18 @@ Respond ONLY with a valid JSON object matching this schema:
 Raw Document Text:
 {raw_text[:8000]}
 """
-            response = client.models.generate_content(
-                model='gemini-2.5-flash',
-                contents=prompt,
+            raw_content = call_groq_chat(
+                prompt=prompt,
+                model=EXTRACTION_MODEL,
+                temperature=0.0,
+                custom_key=api_key
             )
-            resp_text = response.text.strip()
-            if resp_text.startswith("```json"):
-                resp_text = resp_text[7:]
-            if resp_text.startswith("```"):
-                resp_text = resp_text[3:]
-            if resp_text.endswith("```"):
-                resp_text = resp_text[:-3]
-
-            parsed_data = json.loads(resp_text.strip())
-            parsed_data["source"] = "gemini-2.5-flash"
+            cleaned_json = clean_groq_json_response(raw_content)
+            parsed_data = json.loads(cleaned_json)
+            parsed_data["source"] = EXTRACTION_MODEL
             return parsed_data
         except Exception as e:
-            logger.warning("Gemini document extraction error: %s. Using heuristic fallback.", e)
+            logger.warning("Groq document extraction error: %s. Using heuristic fallback.", e)
 
     # Heuristic Rule-Based Fallback
     assignments = []
@@ -149,17 +146,27 @@ Raw Document Text:
     }
 
 
-def execute_app_management(prompt: str, db: Session, user: Dict[str, Any], custom_key: Optional[str] = None) -> Dict[str, Any]:
+def _extract_user_name(user: Any) -> str:
+    if isinstance(user, dict):
+        return user.get("name") or "Student"
+    return getattr(user, "name", None) or "Student"
+
+def _extract_user_major(user: Any) -> str:
+    if isinstance(user, dict):
+        return user.get("major") or "Academic"
+    return getattr(user, "major", None) or "Academic"
+
+def execute_app_management(prompt: str, db: Session, user: Any, custom_key: Optional[str] = None) -> Dict[str, Any]:
     """
     Primary AI App Manager:
     Interprets user prompt, reasons over current tasks/schedules, and executes real application actions.
-    If Gemini API key is configured, uses Gemini 2.5 Flash for deep multimodal reasoning.
-    Otherwise, uses comprehensive rule-based intent parsing.
+    Uses Groq's multi-constraint reasoning model ('deepseek-r1-distill-llama-70b') via OpenAI-compatible SDK
+    if API key is configured; otherwise uses comprehensive rule-based intent parsing.
     """
     now = datetime.now(timezone.utc)
     prompt_str = prompt.strip()
     prompt_lower = prompt_str.lower()
-    api_key = get_gemini_api_key(custom_key)
+    api_key = get_groq_api_key(custom_key)
 
     # 1. Fetch live application context
     existing_tasks = db.query(models.Task).filter(models.Task.status != "completed").order_by(models.Task.priority_score.desc()).limit(12).all()
@@ -190,16 +197,12 @@ def execute_app_management(prompt: str, db: Session, user: Dict[str, Any], custo
         for ev in events
     ]
 
-    # 2. Try Gemini 2.5 Flash if API Key is available
+    # 2. Try Groq DeepSeek-R1 Distill reasoning if API Key is available
     if api_key:
         try:
-            from google import genai
-            client = genai.Client(api_key=api_key)
-
-            system_instruction = f"""
-You are the executive AI manager for LifeSync, an intelligent academic & productivity life-management workspace.
+            system_instruction = f"""You are the executive AI manager for LifeSync, an intelligent academic & productivity life-management workspace.
 Current UTC time: {now.strftime("%A, %B %d, %Y %H:%M UTC")}.
-Active user: {user.get("name", "Student")} ({user.get("major", "Academic")}).
+Active user: {_extract_user_name(user)} ({_extract_user_major(user)}).
 
 CURRENT WORKSPACE STATE:
 - Pending Tasks ({len(tasks_context)}): {json.dumps(tasks_context)}
@@ -249,40 +252,36 @@ Respond ONLY with valid JSON in this exact structure:
   }}
 }}
 """
-            response = client.models.generate_content(
-                model='gemini-2.5-flash',
-                contents=f"{system_instruction}\n\nUser request: \"{prompt_str}\"",
+            raw_content = call_groq_chat(
+                prompt=f"User request: \"{prompt_str}\"",
+                model=REASONING_MODEL,
+                temperature=0.0,
+                system_prompt=system_instruction,
+                custom_key=api_key
             )
-            resp_text = response.text.strip()
-            if resp_text.startswith("```json"):
-                resp_text = resp_text[7:]
-            if resp_text.startswith("```"):
-                resp_text = resp_text[3:]
-            if resp_text.endswith("```"):
-                resp_text = resp_text[:-3]
-
-            parsed_res = json.loads(resp_text.strip())
+            cleaned_json = clean_groq_json_response(raw_content)
+            parsed_res = json.loads(cleaned_json)
             action = parsed_res.get("action", "chat")
             params = parsed_res.get("params", {})
             reply = parsed_res.get("reply", "Understood.")
 
-            # Execute the action requested by Gemini
+            # Execute the action requested by Groq AI
             action_result = execute_action(action, params, db)
             return {
                 "reply": reply,
                 "action": action,
-                "engine": "gemini-2.5-flash",
+                "engine": REASONING_MODEL,
                 "details": action_result
             }
         except Exception as e:
-            logger.warning("Gemini reasoning failed: %s. Falling back to rule-based manager.", e)
+            logger.warning("Groq reasoning failed: %s. Falling back to rule-based manager.", e)
 
     # 3. Comprehensive Rule-Based Fallback Manager
     return rule_based_manager(prompt_str, db, user, existing_tasks, events, now)
 
 
-def rule_based_manager(prompt_str: str, db: Session, user: Dict[str, Any], tasks: List[models.Task], events: List[models.Event], now: datetime) -> Dict[str, Any]:
-    """Smart local intent parser and app orchestrator when Gemini key is offline."""
+def rule_based_manager(prompt_str: str, db: Session, user: Any, tasks: List[models.Task], events: List[models.Event], now: datetime) -> Dict[str, Any]:
+    """Smart local intent parser and app orchestrator when Groq key is offline."""
     p_lower = prompt_str.lower().strip()
 
     # 1. Greetings & Casual Chat
@@ -290,8 +289,9 @@ def rule_based_manager(prompt_str: str, db: Session, user: Dict[str, Any], tasks
     if any(re.match(pat, p_lower) for pat in greeting_patterns):
         pending_count = len(tasks)
         top_task = tasks[0].title if tasks else "No urgent tasks"
+        user_name = _extract_user_name(user)
         return {
-            "reply": f"👋 Hello {user.get('name', 'there')}! I'm your **LifeSync AI Manager**.\n\nYou have **{pending_count} pending task(s)** right now. Top priority: *{top_task}*.\n\nHere are some things I can do for you:\n• 📋 *'What tasks are due this week?'*\n• ⚡ *'Generate an optimized study schedule'*\n• 🔍 *'Check and resolve calendar conflicts'*\n• ➕ *'Add CS450 Raft lab due Friday 5pm'*\n• ✅ *'Mark task 1 as completed'*",
+            "reply": f"👋 Hello {user_name}! I'm your **LifeSync AI Manager**.\n\nYou have **{pending_count} pending task(s)** right now. Top priority: *{top_task}*.\n\nHere are some things I can do for you:\n• 📋 *'What tasks are due this week?'*\n• ⚡ *'Generate an optimized study schedule'*\n• 🔍 *'Check and resolve calendar conflicts'*\n• ➕ *'Add CS450 Raft lab due Friday 5pm'*\n• ✅ *'Mark task 1 as completed'*",
             "action": "chat",
             "engine": "rule_based_fallback"
         }
@@ -523,7 +523,7 @@ def execute_action(action: str, params: Dict[str, Any], db: Session) -> Dict[str
             type=params.get("type", "assignment"),
             deadline=deadline_dt,
             weightage=params.get("weightage", "15%"),
-            description=params.get("description", "Created via Gemini AI"),
+            description=params.get("description", "Created via Groq AI"),
             priority_score=50,
             status="pending"
         )

@@ -151,7 +151,7 @@ export default function ExtractedReviewModal({ isOpen, onClose, uploadId, rawTex
           {loading ? (
             <div style={{ textAlign: 'center', padding: '40px 0', color: '#6B7280' }}>
               <div style={{ fontSize: '28px', marginBottom: '12px' }}>✨</div>
-              <div style={{ fontWeight: 600 }}>Extracting Academic Schedule with Gemini AI...</div>
+              <div style={{ fontWeight: 600 }}>Extracting Academic Schedule with Groq AI (Llama 3.3)...</div>
               <div style={{ fontSize: '13px', marginTop: '4px' }}>Identifying assignments, exam weightages, and lecture times</div>
             </div>
           ) : (

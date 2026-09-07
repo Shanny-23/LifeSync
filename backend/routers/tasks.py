@@ -13,6 +13,7 @@ from schemas import (
     PriorityRecalculationResponse
 )
 from services.priority import recalculate_all_priorities
+from services.auth_service import get_current_user
 
 router = APIRouter(tags=["Tasks"])
 
@@ -59,22 +60,18 @@ def serialize_task_with_slots(task: models.Task, slots: list[models.ScheduledSlo
                 slot_type=s.slot_type or "regular",
                 priority_score=task.priority_score,
                 urgency=score_to_urgency(task.priority_score),
-                deadline=task.deadline,
                 created_at=s.created_at
             )
         )
 
-    deadline_fmt = task.deadline.strftime("%Y-%m-%d %H:%M") if task.deadline else None
-
     return FrontendTaskDetail(
         id=task.id,
+        task=task.title,
         title=task.title,
-        task=task.title,                               # Frontend alias
-        subject=task.subject,
-        category=task.subject or "General",            # Frontend alias
         type=task.type,
-        deadline=task.deadline,
-        deadline_formatted=deadline_fmt,
+        category=task.subject or "General",
+        subject=task.subject or "General",
+        deadline=task.deadline.isoformat() if task.deadline else None,
         weightage=task.weightage,
         description=task.description,
         priority_score=task.priority_score if task.priority_score is not None else 50,
@@ -98,13 +95,14 @@ def get_tasks(
     category: Optional[str] = Query(None, description="Filter by course subject / category"),
     urgency: Optional[str] = Query(None, description="Filter by urgency bucket ('low', 'medium', 'high')"),
     search: Optional[str] = Query(None, description="Search keyword in title or description"),
+    current_user: models.User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """
-    Returns tasks with priority_score, status, and any linked scheduled_slot info.
+    Returns tasks for the authenticated user with priority_score, status, and linked scheduled_slots.
     Supports filtering by category, status, urgency, and search keywords.
     """
-    query = db.query(models.Task)
+    query = db.query(models.Task).filter(models.Task.user_id == current_user.id)
 
     if status_filter and status_filter.lower() != "all":
         query = query.filter(models.Task.status == status_filter)
@@ -162,9 +160,16 @@ def get_tasks(
     response_model=FrontendTaskDetail,
     summary="Get a single task by ID with its linked scheduled slots"
 )
-def get_task_by_id(task_id: int, db: Session = Depends(get_db)):
-    """Retrieve a single task by ID with linked slots. Returns 404 if not found."""
-    task = db.query(models.Task).filter(models.Task.id == task_id).first()
+def get_task_by_id(
+    task_id: int,
+    current_user: models.User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Retrieve a single task by ID with linked slots for the authenticated user."""
+    task = db.query(models.Task).filter(
+        models.Task.id == task_id,
+        models.Task.user_id == current_user.id
+    ).first()
     if not task:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -184,12 +189,15 @@ def get_task_by_id(task_id: int, db: Session = Depends(get_db)):
 @router.post(
     "/recalculate-priority",
     response_model=PriorityRecalculationResponse,
-    summary="Batch recalculate urgency scores for all active tasks"
+    summary="Batch recalculate urgency scores for all active tasks of current user"
 )
-def recalculate_priorities_endpoint(db: Session = Depends(get_db)):
-    """Computes urgency_score = f(deadline_proximity, weightage) for each active task."""
+def recalculate_priorities_endpoint(
+    current_user: models.User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Computes urgency_score for each active task of current user."""
     try:
-        results = recalculate_all_priorities(db=db)
+        results = recalculate_all_priorities(db=db, user_id=current_user.id)
         return PriorityRecalculationResponse(**results)
     except Exception as exc:
         raise HTTPException(
@@ -216,7 +224,11 @@ class TaskCreateRequest(BaseModel):
     status_code=status.HTTP_201_CREATED,
     summary="Create a new task with priority scoring"
 )
-def create_task(payload: TaskCreateRequest, db: Session = Depends(get_db)):
+def create_task(
+    payload: TaskCreateRequest,
+    current_user: models.User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
     subj = payload.subject or payload.category or "General"
     
     # Derive priority score if not explicitly set
@@ -230,6 +242,7 @@ def create_task(payload: TaskCreateRequest, db: Session = Depends(get_db)):
             score = 60
             
     new_task = models.Task(
+        user_id=current_user.id,
         title=payload.title.strip(),
         subject=subj.strip(),
         type=payload.type or "assignment",
@@ -265,8 +278,16 @@ class TaskUpdateRequest(BaseModel):
     response_model=FrontendTaskDetail,
     summary="Update a task's details or completion status"
 )
-def update_task(task_id: int, payload: TaskUpdateRequest, db: Session = Depends(get_db)):
-    task = db.query(models.Task).filter(models.Task.id == task_id).first()
+def update_task(
+    task_id: int,
+    payload: TaskUpdateRequest,
+    current_user: models.User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    task = db.query(models.Task).filter(
+        models.Task.id == task_id,
+        models.Task.user_id == current_user.id
+    ).first()
     if not task:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -321,8 +342,15 @@ def update_task(task_id: int, payload: TaskUpdateRequest, db: Session = Depends(
     status_code=status.HTTP_204_NO_CONTENT,
     summary="Delete a task and its linked slots"
 )
-def delete_task(task_id: int, db: Session = Depends(get_db)):
-    task = db.query(models.Task).filter(models.Task.id == task_id).first()
+def delete_task(
+    task_id: int,
+    current_user: models.User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    task = db.query(models.Task).filter(
+        models.Task.id == task_id,
+        models.Task.user_id == current_user.id
+    ).first()
     if not task:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -334,5 +362,3 @@ def delete_task(task_id: int, db: Session = Depends(get_db)):
     db.delete(task)
     db.commit()
     return None
-
-

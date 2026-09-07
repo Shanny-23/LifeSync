@@ -149,20 +149,21 @@ def calculate_task_priority(
 
 def recalculate_all_priorities(
     db: Session,
-    ref_date: Optional[datetime] = None
+    ref_date: Optional[datetime] = None,
+    user_id: Optional[int] = None
 ) -> dict[str, Any]:
     """
-    Recalculates priority_score for all non-completed tasks in the database.
+    Recalculates priority_score for non-completed tasks in the database.
     Updates the database in place and returns summary statistics.
     """
     if ref_date is None:
         ref_date = datetime.now(timezone.utc)
 
-    tasks = (
-        db.query(models.Task)
-        .filter(models.Task.status != "completed")
-        .all()
-    )
+    query = db.query(models.Task).filter(models.Task.status != "completed")
+    if user_id is not None:
+        query = query.filter(models.Task.user_id == user_id)
+
+    tasks = query.all()
 
     updated_records = []
     for task in tasks:

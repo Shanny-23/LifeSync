@@ -28,7 +28,7 @@ from main import app
 from database import SessionLocal, engine, Base, ensure_db_schema
 import models
 
-client = TestClient(app)
+client = TestClient(app, headers={"Authorization": "Bearer demo-token-demo_user_1"})
 
 FIXTURE_PATH = Path(__file__).resolve().parent / "fixtures" / "sample_timetable.pdf"
 
@@ -133,8 +133,20 @@ def test_automated_pipeline_flow(sample_timetable_pdf, mock_claude):
     db = SessionLocal()
 
     # Step 0: Seed a pending academic task to be scheduled
+    user = db.query(models.User).filter(models.User.google_id == "demo_user_1").first()
+    if not user:
+        user = models.User(
+            google_id="demo_user_1",
+            email="alex.morgan@university.edu",
+            name="Alex Morgan"
+        )
+        db.add(user)
+        db.commit()
+        db.refresh(user)
+
     exam_deadline = datetime.now(timezone.utc) + timedelta(days=5)
     pending_task = models.Task(
+        user_id=user.id,
         title="CS101 Binary Search Tree Assignment",
         type="assignment",
         deadline=exam_deadline,

@@ -119,15 +119,17 @@ def normalize_upload_data(upload_id: int, db: Session) -> dict[str, Any]:
                 title = f"{subject} Class"
 
                 # Natural key dedupe: (title, start_datetime, subject)
-                existing_event = (
+                existing_event_query = (
                     db.query(models.Event)
                     .filter(
                         models.Event.title == title,
                         models.Event.start_datetime == start_dt,
                         models.Event.subject == subject
                     )
-                    .first()
                 )
+                if upload.user_id is not None:
+                    existing_event_query = existing_event_query.filter(models.Event.user_id == upload.user_id)
+                existing_event = existing_event_query.first()
 
                 if existing_event:
                     existing_event.end_datetime = end_dt
@@ -137,6 +139,7 @@ def normalize_upload_data(upload_id: int, db: Session) -> dict[str, Any]:
                     events_updated += 1
                 else:
                     new_event = models.Event(
+                        user_id=upload.user_id,
                         source_upload_id=upload_id,
                         title=title,
                         type="class_session",
@@ -166,15 +169,17 @@ def normalize_upload_data(upload_id: int, db: Session) -> dict[str, Any]:
                 end_dt = parse_flexible_datetime(item.get("end_date"))
 
                 # Natural key dedupe: (title, start_datetime, type)
-                existing_event = (
+                existing_event_query = (
                     db.query(models.Event)
                     .filter(
                         models.Event.title == title,
                         models.Event.start_datetime == start_dt,
                         models.Event.type == event_type
                     )
-                    .first()
                 )
+                if upload.user_id is not None:
+                    existing_event_query = existing_event_query.filter(models.Event.user_id == upload.user_id)
+                existing_event = existing_event_query.first()
 
                 if existing_event:
                     existing_event.end_datetime = end_dt
@@ -184,6 +189,7 @@ def normalize_upload_data(upload_id: int, db: Session) -> dict[str, Any]:
                     events_updated += 1
                 else:
                     new_event = models.Event(
+                        user_id=upload.user_id,
                         source_upload_id=upload_id,
                         title=title,
                         type=event_type,
@@ -207,15 +213,17 @@ def normalize_upload_data(upload_id: int, db: Session) -> dict[str, Any]:
                 rubric_notes = item.get("rubric_notes")
 
                 # Natural key dedupe: (title, deadline, subject)
-                existing_task = (
+                existing_task_query = (
                     db.query(models.Task)
                     .filter(
                         models.Task.title == title,
                         models.Task.deadline == deadline_dt,
                         models.Task.subject == subject
                     )
-                    .first()
                 )
+                if upload.user_id is not None:
+                    existing_task_query = existing_task_query.filter(models.Task.user_id == upload.user_id)
+                existing_task = existing_task_query.first()
 
                 if existing_task:
                     existing_task.description = rubric_notes
@@ -223,6 +231,7 @@ def normalize_upload_data(upload_id: int, db: Session) -> dict[str, Any]:
                     tasks_updated += 1
                 else:
                     new_task = models.Task(
+                        user_id=upload.user_id,
                         source_upload_id=upload_id,
                         title=title,
                         type="assignment",
@@ -247,14 +256,16 @@ def normalize_upload_data(upload_id: int, db: Session) -> dict[str, Any]:
                 weightage_str = str(weightage) if weightage is not None else None
 
                 # Natural key dedupe: (title, subject)
-                existing_task = (
+                existing_task_query = (
                     db.query(models.Task)
                     .filter(
                         models.Task.title == title,
                         models.Task.subject == subject
                     )
-                    .first()
                 )
+                if upload.user_id is not None:
+                    existing_task_query = existing_task_query.filter(models.Task.user_id == upload.user_id)
+                existing_task = existing_task_query.first()
 
                 if existing_task:
                     existing_task.weightage = weightage_str
@@ -262,6 +273,7 @@ def normalize_upload_data(upload_id: int, db: Session) -> dict[str, Any]:
                     tasks_updated += 1
                 else:
                     new_task = models.Task(
+                        user_id=upload.user_id,
                         source_upload_id=upload_id,
                         title=title,
                         type="study_topic",

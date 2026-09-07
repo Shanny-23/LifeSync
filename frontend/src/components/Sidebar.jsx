@@ -7,14 +7,12 @@ import { useAuth } from '../context/AuthContext';
 
 const WORKSPACES = [
   { id: 'academic', name: 'Workspace 01 • Academic', icon: '🎓' },
-  { id: 'research', name: 'Workspace 02 • Research Lab', icon: '🔬' },
-  { id: 'personal', name: 'Workspace 03 • Personal & Habits', icon: '🌱' },
-  { id: 'club', name: 'Workspace 04 • Clubs & Events', icon: '👥' },
+  { id: 'club', name: 'Workspace 02 • Clubs & Events', icon: '👥' },
 ];
 
 export default function Sidebar({ pendingTasksCount = 3 }) {
   const toast = useToast();
-  const { user, openAuthModal } = useAuth();
+  const { user, openAuthModal, logout } = useAuth();
   const [isTaskModalOpen, setIsTaskModalOpen] = useState(false);
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
   const [isWorkspaceMenuOpen, setIsWorkspaceMenuOpen] = useState(false);
@@ -180,35 +178,128 @@ export default function Sidebar({ pendingTasksCount = 3 }) {
           </nav>
         </div>
 
-        {/* User Profile Footer - Clickable */}
-        <div
-          className="sidebar-user"
-          onClick={openAuthModal}
-          style={{ cursor: 'pointer', transition: 'background 0.15s ease', padding: '12px 10px', borderRadius: '8px' }}
-          title="Click to switch student persona or Google account"
-          role="button"
-          tabIndex={0}
-        >
-          {user?.avatar ? (
-            <div style={{ position: 'relative' }}>
-              <img
-                src={user.avatar}
-                alt={user.name}
-                style={{ width: '36px', height: '36px', borderRadius: '50%', objectFit: 'cover' }}
-              />
-              <div className="presence-dot" />
+        {/* User Profile Footer */}
+        {user ? (
+          <div
+            className="sidebar-user"
+            onClick={() => setIsProfileModalOpen(true)}
+            role="button"
+            tabIndex={0}
+            title="Click to view full user profile & academic stats"
+            style={{
+              padding: '10px 10px',
+              borderRadius: '8px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              cursor: 'pointer',
+              userSelect: 'none',
+              transition: 'background 0.15s ease'
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', overflow: 'hidden', flex: 1 }}>
+              {user.picture_url || user.avatar ? (
+                <div style={{ position: 'relative', flexShrink: 0 }}>
+                  <img
+                    src={user.picture_url || user.avatar}
+                    alt={user.name || 'User'}
+                    style={{ width: '36px', height: '36px', borderRadius: '50%', objectFit: 'cover' }}
+                  />
+                  <div className="presence-dot" />
+                </div>
+              ) : (
+                <div className="user-avatar" style={{ flexShrink: 0 }}>
+                  {user.name ? user.name.substring(0, 2).toUpperCase() : 'LS'}
+                  <div className="presence-dot" />
+                </div>
+              )}
+              <div className="user-details" style={{ overflow: 'hidden' }}>
+                <div className="user-name" style={{ textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>
+                  {user.name || 'LifeSync Student'}
+                </div>
+                <div className="user-role" style={{ textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap', fontSize: '0.72rem', color: '#94A3B8' }}>
+                  {user.email || user.major || 'Authenticated'}
+                </div>
+              </div>
             </div>
-          ) : (
-            <div className="user-avatar">
-              {user?.name ? user.name.substring(0, 2).toUpperCase() : 'AM'}
-              <div className="presence-dot" />
+
+            <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+              <button
+                type="button"
+                id="sidebar-switch-btn"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  openAuthModal();
+                }}
+                title="Switch persona or Google account"
+                style={{
+                  background: 'rgba(255, 255, 255, 0.08)',
+                  border: 'none',
+                  borderRadius: '6px',
+                  padding: '6px 8px',
+                  color: '#10B981',
+                  cursor: 'pointer',
+                  fontSize: '0.85rem',
+                  transition: 'all 0.15s ease'
+                }}
+                onMouseEnter={(e) => (e.currentTarget.style.background = 'rgba(16, 185, 129, 0.2)')}
+                onMouseLeave={(e) => (e.currentTarget.style.background = 'rgba(255, 255, 255, 0.08)')}
+              >
+                🔄
+              </button>
+
+              <button
+                type="button"
+                id="sidebar-logout-btn"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  logout();
+                }}
+                title="Sign out of LifeSync"
+                style={{
+                  background: 'rgba(255, 255, 255, 0.08)',
+                  border: 'none',
+                  borderRadius: '6px',
+                  padding: '6px 8px',
+                  color: '#EF4444',
+                  cursor: 'pointer',
+                  fontSize: '0.85rem',
+                  transition: 'all 0.15s ease'
+                }}
+                onMouseEnter={(e) => (e.currentTarget.style.background = 'rgba(239, 68, 68, 0.2)')}
+                onMouseLeave={(e) => (e.currentTarget.style.background = 'rgba(255, 255, 255, 0.08)')}
+              >
+                🚪
+              </button>
             </div>
-          )}
-          <div className="user-details">
-            <div className="user-name">{user?.name || "Alex Morgan"}</div>
-            <div className="user-role">{user?.major || "CS & AI"} ⚙️</div>
           </div>
-        </div>
+        ) : (
+          <div style={{ padding: '8px 4px' }}>
+            <button
+              type="button"
+              id="sidebar-login-btn"
+              onClick={openAuthModal}
+              style={{
+                width: '100%',
+                padding: '10px 12px',
+                borderRadius: '8px',
+                background: '#10B981',
+                color: '#FFFFFF',
+                border: 'none',
+                cursor: 'pointer',
+                fontWeight: 600,
+                fontSize: '0.82rem',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '8px',
+                boxShadow: '0 2px 8px rgba(16, 185, 129, 0.3)'
+              }}
+            >
+              <span>🔐</span> Sign In / Demo
+            </button>
+          </div>
+        )}
       </aside>
 
       <NewTaskModal

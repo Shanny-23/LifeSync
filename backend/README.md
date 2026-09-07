@@ -54,9 +54,9 @@ pip install -r requirements.txt
 ### 3. Configure Environment Variables
 
 Edit `.env` (or copy from `.env.example`):
-```env
-ANTHROPIC_API_KEY=your_anthropic_api_key_here
-ANTHROPIC_MODEL=claude-sonnet-4-6
+GROQ_API_KEY=your_groq_api_key_here
+GROQ_EXTRACTION_MODEL=llama-3.3-70b-versatile
+GROQ_REASONING_MODEL=deepseek-r1-distill-llama-70b
 DATABASE_URL=sqlite:///./lifesync.db
 PORT=8000
 HOST=127.0.0.1

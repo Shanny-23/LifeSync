@@ -501,7 +501,7 @@ export default function Upload() {
                       setIsReviewOpen(true);
                     }}
                   >
-                    ✨ Review Extracted Items (Gemini AI)
+                    ✨ Review Extracted Items (Groq Llama 3.3)
                   </button>
                   <button
                     type="button"

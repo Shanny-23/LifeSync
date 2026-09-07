@@ -1,13 +1,16 @@
 import os
 import logging
 from typing import Optional, Dict, Any
-from fastapi import Header, HTTPException, status
-import firebase_admin
-from firebase_admin import credentials, auth
+from fastapi import Request, Header, HTTPException, status, Depends
+from sqlalchemy.orm import Session
+
+from database import get_db
+import models
+from services.jwt_service import verify_session_token
 
 logger = logging.getLogger(__name__)
 
-# Pre-configured demo student profiles for instant testing and local development
+# Pre-configured demo student profiles for development and fast testing
 DEMO_USERS: Dict[str, Dict[str, Any]] = {
     "demo_user_1": {
         "uid": "demo_user_1",
@@ -33,92 +36,74 @@ DEMO_USERS: Dict[str, Dict[str, Any]] = {
 
 DEFAULT_USER = DEMO_USERS["demo_user_1"]
 
-_firebase_initialized = False
 
-def init_firebase() -> bool:
-    """Initialize Firebase Admin SDK with credentials or project ID if available."""
-    global _firebase_initialized
-    if _firebase_initialized:
-        return True
-
-    cred_path = os.getenv("FIREBASE_SERVICE_ACCOUNT_KEY") or os.getenv("GOOGLE_APPLICATION_CREDENTIALS")
-    project_id = os.getenv("FIREBASE_PROJECT_ID")
-
-    try:
-        if cred_path and os.path.exists(cred_path):
-            cred = credentials.Certificate(cred_path)
-            firebase_admin.initialize_app(cred)
-            _firebase_initialized = True
-            logger.info("Firebase Admin initialized with service account key: %s", cred_path)
-        elif project_id:
-            firebase_admin.initialize_app(options={"projectId": project_id})
-            _firebase_initialized = True
-            logger.info("Firebase Admin initialized with project ID: %s", project_id)
-        else:
-            logger.info("No Firebase Admin credentials found; running in development demo mode.")
-            _firebase_initialized = False
-    except Exception as e:
-        logger.warning("Could not initialize Firebase Admin SDK: %s. Using fallback auth.", e)
-        _firebase_initialized = False
-
-    return _firebase_initialized
-
-# Attempt initialization on import
-init_firebase()
-
-def verify_token(token: str) -> Dict[str, Any]:
+def get_current_user(
+    request: Request,
+    db: Session = Depends(get_db)
+) -> models.User:
     """
-    Verify a Firebase ID token or handle demo user tokens.
-    Returns decoded user claims dictionary.
+    Validates the authenticated session using httpOnly cookie 'lifesync_session'
+    or 'Authorization: Bearer <token>' header.
+    Returns the database User model, or raises 401 Unauthorized.
     """
+    token = request.cookies.get("lifesync_session")
+
+    # Fallback to Authorization Bearer header if cookie not sent
+    if not token:
+        auth_header = request.headers.get("Authorization")
+        if auth_header and auth_header.startswith("Bearer "):
+            token = auth_header.split(" ", 1)[1].strip()
+
     if not token:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Missing authentication token"
+            detail="Authentication required. Please log in."
         )
 
-    # Check for demo tokens (e.g. demo-token-demo_user_1)
+    # Handle demo tokens
     if token.startswith("demo-token-"):
-        user_key = token.replace("demo-token-", "")
-        if user_key in DEMO_USERS:
-            return DEMO_USERS[user_key]
-        return DEFAULT_USER
-
-    # If Firebase Admin is initialized, verify the live token
-    if _firebase_initialized:
-        try:
-            decoded = auth.verify_id_token(token)
-            return {
-                "uid": decoded.get("uid"),
-                "email": decoded.get("email", ""),
-                "name": decoded.get("name") or decoded.get("email", "").split("@")[0].capitalize(),
-                "avatar": decoded.get("picture"),
-                "role": "student"
-            }
-        except Exception as e:
-            logger.warning("Firebase ID token verification failed: %s", e)
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail=f"Invalid or expired token: {str(e)}"
+        persona_key = token.replace("demo-token-", "")
+        persona = DEMO_USERS.get(persona_key, DEFAULT_USER)
+        
+        # Ensure demo user exists in database
+        db_user = db.query(models.User).filter(models.User.google_id == persona["uid"]).first()
+        if not db_user:
+            db_user = models.User(
+                google_id=persona["uid"],
+                email=persona["email"],
+                name=persona["name"],
+                picture_url=persona["avatar"]
             )
+            db.add(db_user)
+            db.commit()
+            db.refresh(db_user)
+        return db_user
 
-    # In development mode, accept any non-empty token string and treat as default user
-    return {
-        **DEFAULT_USER,
-        "token_note": "dev_fallback"
-    }
+    # Validate JWT session token
+    payload = verify_session_token(token)
+    if not payload or "user_id" not in payload:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid or expired session. Please sign in again."
+        )
 
-async def get_current_user(authorization: Optional[str] = Header(None)) -> Dict[str, Any]:
-    """
-    FastAPI dependency to extract and verify the current user from the Authorization header.
-    In local development, if no header is provided, it safely returns the default demo user.
-    """
-    if not authorization:
-        return DEFAULT_USER
+    user_id = payload["user_id"]
+    user = db.query(models.User).filter(models.User.id == user_id).first()
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="User account not found."
+        )
 
-    parts = authorization.split(" ")
-    if len(parts) != 2 or parts[0].lower() != "bearer":
-        return DEFAULT_USER
+    return user
 
-    token = parts[1]
-    return verify_token(token)
+
+def get_optional_current_user(
+    request: Request,
+    db: Session = Depends(get_db)
+) -> Optional[models.User]:
+    """Returns current user if authenticated, or None if not."""
+    try:
+        return get_current_user(request, db)
+    except HTTPException:
+        return None

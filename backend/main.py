@@ -35,6 +35,7 @@ from services.scheduler import generate_ai_schedule
 from services.priority import recalculate_all_priorities
 from services.conflict_resolver import resolve_schedule_conflicts
 from services.exam_planner import generate_exam_study_plan
+from services.auth_service import get_current_user
 
 
 
@@ -179,7 +180,8 @@ async def upload_document(
     background_tasks: BackgroundTasks,
     type: UploadTypeEnum = Form(..., description="Document category type (timetable, syllabus, assignments, holiday_calendar, fest_schedule, club_calendar)"),
     file: UploadFile = File(..., description="PDF or image document"),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
 ):
     """
     Accepts file uploads (PDF/image) and a document type classification.
@@ -225,6 +227,7 @@ async def upload_document(
 
     # Insert record into database
     upload_record = models.Upload(
+        user_id=current_user.id,
         type=type.value,
         filename=file.filename,
         filepath=relative_filepath,
@@ -255,12 +258,16 @@ async def upload_document(
     tags=["Uploads"],
     summary="Poll status of an uploaded document through the background pipeline"
 )
-def get_upload_status(upload_id: int, db: Session = Depends(get_db)):
+def get_upload_status(
+    upload_id: int,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
     """
     Returns the processing status of an upload:
     'pending' -> 'parsed' -> 'extracted' -> 'normalized' -> 'done' (or 'failed' with error_message).
     """
-    record = db.query(models.Upload).filter(models.Upload.id == upload_id).first()
+    record = db.query(models.Upload).filter(models.Upload.id == upload_id, models.Upload.user_id == current_user.id).first()
     if not record:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -295,10 +302,11 @@ def get_upload_status(upload_id: int, db: Session = Depends(get_db)):
 )
 def list_uploads(
     type: UploadTypeEnum | None = None,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
 ):
-    """Retrieve all uploaded documents, optionally filtered by type."""
-    query = db.query(models.Upload)
+    """Retrieve all uploaded documents for current user, optionally filtered by type."""
+    query = db.query(models.Upload).filter(models.Upload.user_id == current_user.id)
     if type:
         query = query.filter(models.Upload.type == type.value)
     return query.order_by(models.Upload.upload_timestamp.desc()).all()
@@ -310,9 +318,13 @@ def list_uploads(
     tags=["Uploads"],
     summary="Get single upload details by ID"
 )
-def get_upload_by_id(upload_id: int, db: Session = Depends(get_db)):
+def get_upload_by_id(
+    upload_id: int,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
     """Retrieve details for a specific upload by ID."""
-    record = db.query(models.Upload).filter(models.Upload.id == upload_id).first()
+    record = db.query(models.Upload).filter(models.Upload.id == upload_id, models.Upload.user_id == current_user.id).first()
     if not record:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -327,12 +339,16 @@ def get_upload_by_id(upload_id: int, db: Session = Depends(get_db)):
     tags=["Uploads"],
     summary="Trigger OCR / PDF text extraction for an uploaded document"
 )
-def parse_upload_document(upload_id: int, db: Session = Depends(get_db)):
+def parse_upload_document(
+    upload_id: int,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
     """
     Extracts raw text from an uploaded document (PDF via pdfplumber/pypdf or image via Tesseract OCR).
     Updates the upload record's raw_text column and sets status to 'parsed' (or 'failed' on error).
     """
-    record = db.query(models.Upload).filter(models.Upload.id == upload_id).first()
+    record = db.query(models.Upload).filter(models.Upload.id == upload_id, models.Upload.user_id == current_user.id).first()
     if not record:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -388,12 +404,16 @@ def parse_upload_document(upload_id: int, db: Session = Depends(get_db)):
     tags=["Extraction"],
     summary="Extract structured entities using Claude (claude-sonnet-4-6)"
 )
-def extract_document_entities(upload_id: int, db: Session = Depends(get_db)):
+def extract_document_entities(
+    upload_id: int,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
     """
     Extracts structured entities matching the upload type using Anthropic Claude (claude-sonnet-4-6).
     Validates output against Pydantic models per type and persists rows into the 'extracted_data' table.
     """
-    record = db.query(models.Upload).filter(models.Upload.id == upload_id).first()
+    record = db.query(models.Upload).filter(models.Upload.id == upload_id, models.Upload.user_id == current_user.id).first()
     if not record:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -443,6 +463,8 @@ def extract_document_entities(upload_id: int, db: Session = Depends(get_db)):
             }
         )
     except RuntimeError as r_err:
+        record.status = "failed"
+        db.commit()
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=str(r_err)
@@ -462,8 +484,19 @@ def extract_document_entities(upload_id: int, db: Session = Depends(get_db)):
     tags=["Extraction"],
     summary="Get extracted records for an upload"
 )
-def get_extracted_data_for_upload(upload_id: int, db: Session = Depends(get_db)):
+def get_extracted_data_for_upload(
+    upload_id: int,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
     """Retrieve all structured extraction entries associated with an upload."""
+    upload = db.query(models.Upload).filter(models.Upload.id == upload_id, models.Upload.user_id == current_user.id).first()
+    if not upload:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Upload with id {upload_id} not found."
+        )
+
     records = (
         db.query(models.ExtractedData)
         .filter(models.ExtractedData.upload_id == upload_id)
@@ -479,12 +512,23 @@ def get_extracted_data_for_upload(upload_id: int, db: Session = Depends(get_db))
     tags=["Normalization"],
     summary="Normalize extracted items into unified events or tasks tables"
 )
-def normalize_document_data(upload_id: int, db: Session = Depends(get_db)):
+def normalize_document_data(
+    upload_id: int,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
     """
     Takes extracted JSON data from 'extracted_data' for a given upload_id,
     and normalizes into 'events' or 'tasks' table.
     Prevents duplicates on re-upload via natural key deduplication.
     """
+    upload = db.query(models.Upload).filter(models.Upload.id == upload_id, models.Upload.user_id == current_user.id).first()
+    if not upload:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Upload with id {upload_id} not found."
+        )
+
     try:
         result = normalize_upload_data(upload_id=upload_id, db=db)
         return NormalizationResponse(**result)
@@ -503,7 +547,7 @@ def normalize_document_data(upload_id: int, db: Session = Depends(get_db)):
 # ==========================================
 # Modular REST API Routers for Frontend Consumption
 # ==========================================
-from routers import schedule, tasks, events, google, auth, ai
+from routers import schedule, tasks, events, google, auth, ai, focus, courses
 
 app.include_router(schedule.router, prefix="/api/schedule")
 app.include_router(tasks.router, prefix="/api/tasks")
@@ -511,6 +555,8 @@ app.include_router(events.router, prefix="/api/events")
 app.include_router(google.router)
 app.include_router(auth.router)
 app.include_router(ai.router)
+app.include_router(focus.router)
+app.include_router(courses.router)
 
 
 
@@ -523,7 +569,8 @@ app.include_router(ai.router)
 )
 def generate_exam_study_plan_endpoint(
     task_id: int,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
 ):
     """
     Given an exam task, generates multiple smaller study sessions leading up to the exam date
@@ -531,6 +578,13 @@ def generate_exam_study_plan_endpoint(
     Ensures sessions respect free time (no class overlaps), tags each slot with slot_type='study_session',
     and passes candidate sessions through the conflict resolver.
     """
+    task = db.query(models.Task).filter(models.Task.id == task_id, models.Task.user_id == current_user.id).first()
+    if not task:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Task with id {task_id} not found."
+        )
+
     try:
         results = generate_exam_study_plan(task_id=task_id, db=db)
         return ExamPlannerResponse(**results)

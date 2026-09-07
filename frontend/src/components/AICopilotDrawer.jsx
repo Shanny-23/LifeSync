@@ -8,7 +8,7 @@ export default function AICopilotDrawer() {
   const [showKeyConfig, setShowKeyConfig] = useState(false);
   const [apiKeyInput, setApiKeyInput] = useState('');
   const [savingKey, setSavingKey] = useState(false);
-  const [aiStatus, setAiStatus] = useState({ has_key: false, model: 'gemini-2.5-flash', mode: 'rule-manager' });
+  const [aiStatus, setAiStatus] = useState({ has_key: false, model: 'llama-3.3-70b', mode: 'rule-manager' });
 
   const { addToast } = useToast();
   const messagesEndRef = useRef(null);
@@ -64,7 +64,7 @@ export default function AICopilotDrawer() {
 
       if (!res.ok) throw new Error('Failed to save API key');
 
-      addToast('Gemini API key saved! Live Gemini 2.5 Flash activated.', 'success');
+      addToast('Groq API key saved! Live Llama 3.3 & DeepSeek-R1 activated.', 'success');
       setApiKeyInput('');
       setShowKeyConfig(false);
       await fetchStatus();
@@ -268,7 +268,7 @@ export default function AICopilotDrawer() {
                     LifeSync AI Manager
                   </h3>
                   <div style={{ fontSize: '11px', color: '#B4D3C2', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                    <span>{aiStatus.has_key ? '🟢 Gemini 2.5 Flash' : '⚡ Smart App Manager'}</span>
+                    <span>{aiStatus.has_key ? '🟢 Groq (Llama 3.3 & DeepSeek-R1)' : '⚡ Smart App Manager'}</span>
                     <button
                       onClick={() => setShowKeyConfig(!showKeyConfig)}
                       style={{
@@ -281,7 +281,7 @@ export default function AICopilotDrawer() {
                         padding: 0
                       }}
                     >
-                      {aiStatus.has_key ? '• Change Key' : '• Add Gemini Key'}
+                      {aiStatus.has_key ? '• Change Key' : '• Add Groq Key'}
                     </button>
                   </div>
                 </div>
@@ -311,15 +311,15 @@ export default function AICopilotDrawer() {
                 }}
               >
                 <div style={{ fontSize: '12px', fontWeight: 600, color: '#166534', marginBottom: '6px' }}>
-                  🔑 Configure Google Gemini API Key
+                  🔑 Configure Groq API Key
                 </div>
                 <div style={{ fontSize: '11px', color: '#4B5563', marginBottom: '8px' }}>
-                  Paste your key from <a href="https://aistudio.google.com" target="_blank" rel="noreferrer" style={{ color: '#1F5C3D', fontWeight: 600 }}>Google AI Studio</a> to enable full live LLM reasoning.
+                  Paste your key from <a href="https://console.groq.com" target="_blank" rel="noreferrer" style={{ color: '#1F5C3D', fontWeight: 600 }}>console.groq.com</a> to enable high-speed LLM reasoning.
                 </div>
                 <form onSubmit={handleSaveApiKey} style={{ display: 'flex', gap: '8px' }}>
                   <input
                     type="password"
-                    placeholder="AIzaSy..."
+                    placeholder="gsk_..."
                     value={apiKeyInput}
                     onChange={(e) => setApiKeyInput(e.target.value)}
                     style={{

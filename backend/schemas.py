@@ -247,7 +247,7 @@ class FrontendSlotDetail(BaseModel):
     deadline: Optional[datetime] = None
     event_id: Optional[int] = None      # Optional linked event ID
     event_title: Optional[str] = None   # Optional linked event title
-    created_at: datetime
+    created_at: Optional[datetime] = None
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -269,7 +269,7 @@ class FrontendTaskDetail(BaseModel):
     completed: bool = False             # Frontend compatibility boolean
     scheduledSlot: Optional[str] = None # Primary slot string for frontend table view
     scheduled_slots: list[FrontendSlotDetail] = []
-    created_at: datetime
+    created_at: Optional[datetime] = None
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -291,6 +291,69 @@ class FrontendEventDetail(BaseModel):
     created_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
+
+
+# ==========================================
+# Courses & Syllabus Schemas
+# ==========================================
+
+class CourseBase(BaseModel):
+    code: str
+    name: str
+    credits: int = 4
+    syllabus_covered_pct: int = 0
+    next_exam: Optional[str] = None
+    exam_date: Optional[str] = None
+    color: str = "#2563EB"
+    semester: str = "Fall 2026"
+
+
+class CourseCreate(CourseBase):
+    pass
+
+
+class CourseSyllabusUpdate(BaseModel):
+    syllabus_covered_pct: int
+
+
+class CourseResponse(CourseBase):
+    id: int
+    created_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+# ==========================================
+# Focus Sessions Schemas
+# ==========================================
+
+class FocusSessionCreate(BaseModel):
+    task_id: Optional[int] = None
+    mode: str = "POMODORO"              # 'POMODORO', 'DEEP_WORK', 'SHORT_BREAK'
+    duration_seconds: int = 1500
+    completed: bool = True
+    target_name: Optional[str] = None
+
+
+class FocusSessionResponse(BaseModel):
+    id: int
+    task_id: Optional[int] = None
+    mode: str
+    duration_seconds: int
+    completed: bool
+    target_name: Optional[str] = None
+    started_at: datetime
+    completed_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class FocusStatsResponse(BaseModel):
+    today_sessions_count: int
+    today_focus_seconds: int
+    today_focus_minutes: int
+    streak_days: int
+    recent_sessions: list[FocusSessionResponse] = []
 
 
 

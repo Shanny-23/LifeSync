@@ -1,21 +1,60 @@
+import { useState } from 'react';
 import { Outlet, useLocation, Link } from 'react-router-dom';
 import Sidebar from './Sidebar';
+import FigmaAppShell from './FigmaAppShell';
+import { useToast } from '../context/ToastContext';
+import { useAuth } from '../context/AuthContext';
 
 export default function Layout() {
   const location = useLocation();
+  const toast = useToast();
+  const { user, loginWithGoogle, openAuthModal } = useAuth();
   const isLanding = location.pathname === '/landing';
+
+  // Toggle between 1:1 Figma Mobile View and Desktop Workspace
+  const [isFigmaMobileMode, setIsFigmaMobileMode] = useState(false);
+
+  const toggleViewMode = () => {
+    const next = !isFigmaMobileMode;
+    setIsFigmaMobileMode(next);
+    if (next) {
+      toast.info('📱 Switched to 1:1 Figma Mobile App Preview Mode');
+    } else {
+      toast.info('💻 Switched to Expanded Desktop Workspace');
+    }
+  };
 
   if (isLanding) {
     return (
       <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
         <header className="landing-navbar">
           <Link to="/landing" style={{ textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <span style={{ fontSize: '1.4rem', fontWeight: 800, color: '#1B3B2E' }}>LifeSync</span>
+            <span style={{ fontSize: '1.4rem', fontWeight: 800, color: '#14382A' }}>LifeSync</span>
             <span className="pill-eyebrow forest">v1.0</span>
           </Link>
           <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-            <Link to="/home" className="btn btn-secondary btn-sm">Sign In</Link>
-            <Link to="/home" className="btn btn-primary btn-sm">Get App</Link>
+            {user ? (
+              <Link to="/dashboard" className="btn btn-primary btn-sm" style={{ background: '#14382A' }}>
+                Go to Dashboard →
+              </Link>
+            ) : (
+              <>
+                <button
+                  onClick={openAuthModal}
+                  className="btn btn-secondary btn-sm"
+                  style={{ cursor: 'pointer' }}
+                >
+                  Sign In
+                </button>
+                <button
+                  onClick={loginWithGoogle}
+                  className="btn btn-primary btn-sm"
+                  style={{ background: '#14382A', cursor: 'pointer' }}
+                >
+                  Get App
+                </button>
+              </>
+            )}
           </div>
         </header>
 
@@ -37,14 +76,47 @@ export default function Layout() {
 
       {/* Main Content Area */}
       <div className="workspace-main">
-        {/* Workspace Topbar */}
+        {/* Workspace Topbar with Figma View Switcher */}
         <header className="workspace-topbar">
-          <div className="topbar-status">
+          <div className="topbar-status" style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
             <span className="status-indicator-dot" />
             <span>Authenticated • Cloud Sync Active • Wednesday, Oct 28</span>
+
+            {/* Dynamic student identity badge */}
+            <div
+              onClick={openAuthModal}
+              role="button"
+              tabIndex={0}
+              title="Click to switch account or Google profile"
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '6px',
+                padding: '3px 10px',
+                borderRadius: '20px',
+                background: '#E7F0EA',
+                color: '#14382A',
+                fontSize: '0.74rem',
+                fontWeight: 700,
+                cursor: 'pointer',
+                userSelect: 'none'
+              }}
+            >
+              <span>👤</span> {user?.name || 'LifeSync Student'}
+            </div>
           </div>
 
-          <div className="topbar-actions">
+          <div className="topbar-actions" style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            {/* View Switcher Button */}
+            <button
+              type="button"
+              className={`figma-mode-toggle ${isFigmaMobileMode ? 'active' : ''}`}
+              onClick={toggleViewMode}
+              title="Toggle between 1:1 Figma Mobile View and Full Desktop Workspace"
+            >
+              {isFigmaMobileMode ? '💻 Expanded Workspace' : '📱 Figma Mobile View'}
+            </button>
+
             <Link to="/upload" className="btn btn-pale btn-sm">
               📤 Upload Documents
             </Link>
@@ -54,8 +126,12 @@ export default function Layout() {
           </div>
         </header>
 
-        {/* Page Content Outlet */}
-        <Outlet />
+        {/* Conditional rendering: 1:1 Figma Mobile Frame or standard Page Content */}
+        {isFigmaMobileMode ? (
+          <FigmaAppShell />
+        ) : (
+          <Outlet />
+        )}
       </div>
     </div>
   );

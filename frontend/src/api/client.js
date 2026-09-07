@@ -13,9 +13,10 @@ export const API_BASE_URL =
  */
 async function request(endpoint, options = {}) {
   const url = `${API_BASE_URL}${endpoint}`;
-  const token = typeof window !== 'undefined' ? localStorage.getItem('lifesync_token') || 'demo-token-demo_user_1' : null;
+  const token = typeof window !== 'undefined' ? localStorage.getItem('lifesync_token') : null;
   const config = {
     ...options,
+    credentials: 'include',
     headers: {
       ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
       ...(options.headers || {}),
@@ -54,6 +55,21 @@ async function request(endpoint, options = {}) {
     }
     throw err;
   }
+}
+
+// -------------------------------------------------------------
+// Auth API
+// -------------------------------------------------------------
+export async function getMe() {
+  return request('/api/auth/me');
+}
+
+export async function logout() {
+  return request('/api/auth/logout', { method: 'POST' });
+}
+
+export function loginWithGoogle() {
+  window.location.href = `${API_BASE_URL}/api/auth/google/login`;
 }
 
 // -------------------------------------------------------------
@@ -228,4 +244,7 @@ export default {
   connectGoogle,
   disconnectGoogle,
   importGoogleCalendar,
+  getMe,
+  logout,
+  loginWithGoogle,
 };

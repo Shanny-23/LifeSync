@@ -201,7 +201,67 @@ export default function Home() {
           </div>
         )}
 
-        {/* 4. Routine Habit Row */}
+        {/* 4. Figma Split Urgency & Spaced Review Cards Grid */}
+        <div className="figma-split-grid" style={{ marginTop: '16px', marginBottom: '16px' }}>
+          {/* Urgent Card */}
+          <div className="figma-card-coral">
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <span className="pill-eyebrow coral">Urgent • Due Today</span>
+              <span style={{ fontSize: '0.72rem', color: '#B23A3A', fontWeight: 700 }}>⏳ 03h 14m</span>
+            </div>
+            <div>
+              <div style={{ fontSize: '0.95rem', fontWeight: 800, color: '#14382A' }}>
+                {topUrgentTask ? (topUrgentTask.title || topUrgentTask.task) : "CS101 Term Paper - Literature Review"}
+              </div>
+              <div style={{ fontSize: '0.72rem', color: '#64748B', marginTop: '3px' }}>
+                {topUrgentTask?.subject || "Computer Science"} • Weightage 35% • Priority Escalated
+              </div>
+            </div>
+            <button
+              type="button"
+              className="btn btn-coral btn-xs"
+              style={{ alignSelf: 'flex-start', borderRadius: '20px' }}
+              onClick={() => {
+                if (topUrgentTask) setSelectedTaskForModal(topUrgentTask);
+                else navigate('/tasks');
+              }}
+            >
+              ⚡ Focus Now
+            </button>
+          </div>
+
+          {/* Spaced Review Card */}
+          <div className="figma-card-amber">
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <span className="pill-eyebrow amber">Spaced Review</span>
+              <span style={{ fontSize: '0.72rem', color: '#92400E', fontWeight: 700 }}>Slot 2 of 4</span>
+            </div>
+            <div>
+              <div style={{ fontSize: '0.95rem', fontWeight: 800, color: '#14382A' }}>
+                Math 204: Probability & Markov Chains
+              </div>
+              <div style={{ fontSize: '0.72rem', color: '#92400E', marginTop: '3px' }}>
+                Retention Decay Shield • Optimal Interval: 24h
+              </div>
+            </div>
+            <button
+              type="button"
+              className="btn btn-xs"
+              style={{
+                background: '#D97706',
+                color: '#FFFFFF',
+                border: 'none',
+                borderRadius: '20px',
+                alignSelf: 'flex-start',
+              }}
+              onClick={() => toast.info('Starting 20-minute active recall review session!')}
+            >
+              ▶ Review (20m)
+            </button>
+          </div>
+        </div>
+
+        {/* 5. Routine Habit Row */}
         <div className="routine-row">
           <div className="routine-row-left">
             <div className="routine-icon-box">

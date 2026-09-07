@@ -133,6 +133,7 @@ def generate_exam_study_plan(
             # Create slot tagged with slot_type='study_session'
             study_slot = models.ScheduledSlot(
                 task_id=task.id,
+                user_id=task.user_id,
                 scheduled_date=target_date_str,
                 start_time=gap_start_dt.strftime("%H:%M"),
                 end_time=gap_end_dt.strftime("%H:%M"),
@@ -153,14 +154,15 @@ def generate_exam_study_plan(
     final_study_slots = []
 
     for slot in created_study_slots:
-        conflicting_ev = find_conflicting_event(slot, db)
+        conflicting_ev = find_conflicting_event(slot, db, user_id=task.user_id)
         if conflicting_ev:
             conflicts_resolved_count += 1
             alt = find_alternate_slot_for_task(
                 task=task,
                 conflicted_slot=slot,
                 db=db,
-                days_ahead=horizon_days
+                days_ahead=horizon_days,
+                user_id=task.user_id
             )
             if alt:
                 slot.scheduled_date = alt["scheduled_date"]
