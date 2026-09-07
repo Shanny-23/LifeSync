@@ -108,7 +108,7 @@ def get_schedule(
     query = (
         db.query(models.ScheduledSlot, models.Task)
         .outerjoin(models.Task, models.ScheduledSlot.task_id == models.Task.id)
-        .filter(models.ScheduledSlot.user_id == current_user.id)
+        .filter((models.ScheduledSlot.user_id == current_user.id) | (models.ScheduledSlot.user_id == None))
     )
 
     if status_filter and status_filter.lower() != "all":
@@ -132,33 +132,29 @@ def get_schedule(
     event_lookup = {}
     if rows:
         dates = {slot.scheduled_date for slot, _ in rows}
-        all_events = db.query(models.Event).filter(models.Event.user_id == current_user.id).all()
+        all_events = db.query(models.Event).filter(
+            (models.Event.user_id == current_user.id) | (models.Event.user_id == None)
+        ).all()
         for ev in all_events:
             if ev.start_datetime:
                 d_str = ev.start_datetime.strftime("%Y-%m-%d")
                 if d_str in dates:
                     if ev.subject:
-                        event_lookup[(d_str, ev.subject.upper().strip())] = ev
-                    if d_str not in event_lookup:
-                        event_lookup[d_str] = ev
+                        event_lookup[f"{d_str}_{ev.subject.strip().upper()}"] = ev
 
+    # 4. Map to frontend slot detail models
     results = []
     for slot, task in rows:
-        task_title = task.title if task else None
-        subject = task.subject if task else None
+        task_title = task.title if task else "Self-Directed Study"
+        subject = task.subject if task else (slot.subject or "General")
         p_score = task.priority_score if task else 50
         deadline = task.deadline if task else None
-        urgency = score_to_urgency(p_score)
 
-        # Match event if available
-        matched_event = None
-        if task and task.subject:
-            matched_event = event_lookup.get((slot.scheduled_date, task.subject.upper().strip()))
-        if not matched_event:
-            matched_event = event_lookup.get(slot.scheduled_date)
-
-        event_id = matched_event.id if matched_event else None
-        event_title = matched_event.title if matched_event else None
+        # Try linking with event
+        event_key = f"{slot.scheduled_date}_{subject.strip().upper()}"
+        matched_ev = event_lookup.get(event_key)
+        event_id = matched_ev.id if matched_ev else None
+        event_title = matched_ev.title if matched_ev else None
 
         results.append(
             FrontendSlotDetail(
@@ -179,7 +175,7 @@ def get_schedule(
                 status=slot.status,
                 slot_type=slot.slot_type or "regular",
                 priority_score=p_score,
-                urgency=urgency,
+                urgency=score_to_urgency(p_score),
                 deadline=deadline,
                 event_id=event_id,
                 event_title=event_title,
@@ -204,7 +200,7 @@ def list_conflict_logs(
     records = (
         db.query(models.ConflictLog)
         .join(models.ScheduledSlot, models.ConflictLog.slot_id == models.ScheduledSlot.id)
-        .filter(models.ScheduledSlot.user_id == current_user.id)
+        .filter((models.ScheduledSlot.user_id == current_user.id) | (models.ScheduledSlot.user_id == None))
         .order_by(models.ConflictLog.created_at.desc())
         .limit(limit)
         .all()

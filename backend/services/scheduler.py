@@ -17,6 +17,7 @@ from services.groq_service import (
     get_groq_api_key,
     REASONING_MODEL
 )
+from services.conflict_resolver import is_event_overlapping
 
 load_dotenv()
 logger = logging.getLogger(__name__)
@@ -27,6 +28,110 @@ MODEL_NAME = os.getenv("ANTHROPIC_MODEL", "claude-sonnet-4-6")
 DAY_START_TIME = time(8, 0)
 DAY_END_TIME = time(22, 0)
 MIN_SLOT_MINUTES = 30
+
+
+def validate_schedule_slot(
+    slot_data: dict[str, Any] | ScheduledSlotItem,
+    db: Session,
+    user_id: Optional[int] = None,
+    current_time: Optional[datetime] = None,
+    accepted_slots_intervals: Optional[list[tuple[datetime, datetime]]] = None
+) -> tuple[bool, Optional[models.Task], Optional[str]]:
+    """
+    Stricter validation for AI scheduling engine (DeepSeek R1 / LLM) outputs:
+    1. Verify task_id exists in the database — discard/flag if missing.
+    2. Verify scheduled_date and start/end times fall strictly within task's actual deadline window.
+    3. Hard assertion: Verify no scheduled_slot overlaps a fixed event (class, exam, fest, holiday).
+       Also verify no overlap with already accepted slots in this batch.
+    4. Return (is_valid, task, reason). If is_valid is False and task is not None,
+       the task must be marked 'needs_manual_review' instead of being silently dropped.
+    """
+    if isinstance(slot_data, ScheduledSlotItem):
+        task_id = slot_data.task_id
+        date_str = slot_data.scheduled_date
+        start_str = slot_data.scheduled_start_time
+        end_str = slot_data.scheduled_end_time
+    elif isinstance(slot_data, dict):
+        task_id = slot_data.get("task_id")
+        date_str = slot_data.get("scheduled_date")
+        start_str = slot_data.get("scheduled_start_time")
+        end_str = slot_data.get("scheduled_end_time")
+    else:
+        return False, None, f"Unsupported slot data type: {type(slot_data)}"
+
+    # 1. Verify task_id actually exists in database
+    if task_id is None:
+        logger.warning("AI Scheduler validation failed: missing task_id in proposed slot.")
+        return False, None, "missing_task_id"
+
+    task_query = db.query(models.Task).filter(models.Task.id == task_id)
+    if user_id is not None:
+        task_query = task_query.filter((models.Task.user_id == user_id) | (models.Task.user_id == None))
+    task = task_query.first()
+
+    if not task:
+        logger.warning(
+            "AI Scheduler validation failed: task_id %s does not exist in database. Discarding hallucinated slot.",
+            task_id
+        )
+        return False, None, f"task_id_{task_id}_not_found_in_db"
+
+    # 2. Verify date/time format and deadline window
+    try:
+        s_date = datetime.strptime(str(date_str).strip(), "%Y-%m-%d").date()
+        s_start = datetime.strptime(str(start_str).strip(), "%H:%M").time()
+        s_end = datetime.strptime(str(end_str).strip(), "%H:%M").time()
+        slot_start_dt = datetime.combine(s_date, s_start)
+        slot_end_dt = datetime.combine(s_date, s_end)
+    except Exception as parse_err:
+        logger.warning(
+            "AI Scheduler validation failed: task #%s ('%s') has invalid date/time format (%s %s-%s): %s",
+            task.id, task.title, date_str, start_str, end_str, parse_err
+        )
+        return False, task, f"invalid_date_time_format: {parse_err}"
+
+    if slot_end_dt <= slot_start_dt:
+        logger.warning(
+            "AI Scheduler validation failed: task #%s ('%s') end time <= start time (%s to %s).",
+            task.id, task.title, start_str, end_str
+        )
+        return False, task, "slot_end_time_must_be_after_start_time"
+
+    # Verify task's actual deadline window
+    if task.deadline:
+        deadline_dt = task.deadline.replace(tzinfo=None) if task.deadline.tzinfo else task.deadline
+        if slot_end_dt > deadline_dt:
+            logger.warning(
+                "AI Scheduler validation failed: task #%s ('%s') scheduled slot [%s %s-%s] exceeds actual deadline %s. Rejecting slot.",
+                task.id, task.title, date_str, start_str, end_str, deadline_dt
+            )
+            return False, task, f"exceeds_deadline: slot_end ({slot_end_dt}) > deadline ({deadline_dt})"
+
+    # 3. Hard assertion: Verify no scheduled_slot overlaps a fixed event (class, exam, fest, holiday)
+    events_query = db.query(models.Event).filter(models.Event.status != "cancelled")
+    if user_id is not None:
+        events_query = events_query.filter((models.Event.user_id == user_id) | (models.Event.user_id == None))
+    events = events_query.all()
+
+    for ev in events:
+        if is_event_overlapping(slot_start_dt, slot_end_dt, ev):
+            logger.warning(
+                "AI Scheduler hard assertion failed: task #%s ('%s') scheduled slot [%s %s-%s] overlaps fixed event #%s '%s' (%s). Rejecting slot.",
+                task.id, task.title, date_str, start_str, end_str, ev.id, ev.title, ev.type
+            )
+            return False, task, f"overlaps_fixed_event: #{ev.id} '{ev.title}' ({ev.type})"
+
+    # Also verify no overlap with already accepted slots in this batch
+    if accepted_slots_intervals:
+        for a_start, a_end in accepted_slots_intervals:
+            if slot_start_dt < a_end and slot_end_dt > a_start:
+                logger.warning(
+                    "AI Scheduler hard assertion failed: task #%s ('%s') scheduled slot [%s %s-%s] overlaps another slot in this batch (%s to %s).",
+                    task.id, task.title, date_str, start_str, end_str, a_start, a_end
+                )
+                return False, task, "overlaps_another_slot_in_batch"
+
+    return True, task, None
 
 
 def calculate_task_priority(
@@ -129,7 +234,9 @@ def get_schedule_context(db: Session, days_ahead: int = 7, user_id: Optional[int
         )
     )
     if user_id is not None:
-        class_events_query = class_events_query.filter(models.Event.user_id == user_id)
+        class_events_query = class_events_query.filter(
+            (models.Event.user_id == user_id) | (models.Event.user_id == None)
+        )
     class_events = class_events_query.all()
 
     # Group busy intervals by date
@@ -167,13 +274,15 @@ def get_schedule_context(db: Session, days_ahead: int = 7, user_id: Optional[int
                 "free_slots": slots
             })
 
-    # 3. Query pending tasks and calculate priority scores
+    # 3. Query pending & needs_manual_review tasks and calculate priority scores
     pending_tasks_query = (
         db.query(models.Task)
-        .filter(models.Task.status == "pending")
+        .filter(models.Task.status.in_(["pending", "needs_manual_review"]))
     )
     if user_id is not None:
-        pending_tasks_query = pending_tasks_query.filter(models.Task.user_id == user_id)
+        pending_tasks_query = pending_tasks_query.filter(
+            (models.Task.user_id == user_id) | (models.Task.user_id == None)
+        )
     pending_tasks = pending_tasks_query.all()
 
     tasks_summary = []
@@ -217,6 +326,7 @@ def generate_ai_schedule(db: Session, days_ahead: int = 7, user_id: Optional[int
     Fits pending tasks into computed free slots before deadlines, validates the plan,
     and inserts slots into 'scheduled_slots' table.
     """
+    now = datetime.now(timezone.utc)
     context = get_schedule_context(db, days_ahead=days_ahead, user_id=user_id)
     pending_tasks = context["tasks"]
 
@@ -369,36 +479,58 @@ Generate the schedule. Return ONLY the JSON array matching:
     if not isinstance(parsed_slots, list):
         raise ValueError(f"Expected a JSON array of scheduled slots, got {type(parsed_slots).__name__}")
 
-    # Validate each slot with Pydantic
-    validated_slots: list[ScheduledSlotItem] = []
-    for item in parsed_slots:
-        try:
-            slot_item = ScheduledSlotItem.model_validate(item)
-            validated_slots.append(slot_item)
-        except ValidationError as v_err:
-            raise ValueError(f"Validation failed for slot: {item}. Errors: {v_err.errors()}")
-
-    # Persist validated slots in DB
+    # Strict validation of every slot returned by DeepSeek R1 / AI
     created_slots = []
     scheduled_task_ids = set()
+    flagged_task_ids = set()
+    accepted_intervals: list[tuple[datetime, datetime]] = []
 
-    for vs in validated_slots:
-        task = db.query(models.Task).filter(models.Task.id == vs.task_id).first()
-        if not task:
+    for item in parsed_slots:
+        is_valid, task, failure_reason = validate_schedule_slot(
+            slot_data=item,
+            db=db,
+            user_id=user_id,
+            current_time=now,
+            accepted_slots_intervals=accepted_intervals
+        )
+
+        if not is_valid:
+            if task:
+                task.status = "needs_manual_review"
+                flagged_task_ids.add(task.id)
+                logger.info(
+                    "Task #%s ('%s') marked 'needs_manual_review' due to AI scheduling failure: %s",
+                    task.id, task.title, failure_reason
+                )
             continue
 
+        # Extract values
+        if isinstance(item, ScheduledSlotItem):
+            s_date_val = item.scheduled_date
+            s_start_val = item.scheduled_start_time
+            s_end_val = item.scheduled_end_time
+        else:
+            s_date_val = str(item.get("scheduled_date", "")).strip()
+            s_start_val = str(item.get("scheduled_start_time", "")).strip()
+            s_end_val = str(item.get("scheduled_end_time", "")).strip()
+
         new_slot = models.ScheduledSlot(
-            task_id=vs.task_id,
+            task_id=task.id,
             user_id=user_id,
-            scheduled_date=vs.scheduled_date,
-            start_time=vs.scheduled_start_time,
-            end_time=vs.scheduled_end_time,
+            scheduled_date=s_date_val,
+            start_time=s_start_val,
+            end_time=s_end_val,
             status="active"
         )
         db.add(new_slot)
         task.status = "scheduled"
         scheduled_task_ids.add(task.id)
         created_slots.append((new_slot, task))
+
+        s_d = datetime.strptime(s_date_val, "%Y-%m-%d").date()
+        s_st = datetime.strptime(s_start_val, "%H:%M").time()
+        s_et = datetime.strptime(s_end_val, "%H:%M").time()
+        accepted_intervals.append((datetime.combine(s_d, s_st), datetime.combine(s_d, s_et)))
 
     db.commit()
 
@@ -421,10 +553,15 @@ Generate the schedule. Return ONLY the JSON array matching:
             "created_at": slot_obj.created_at
         })
 
+    msg = f"Successfully scheduled {len(scheduled_task_ids)} task(s) into {len(results)} slot(s)."
+    if flagged_task_ids:
+        msg += f" {len(flagged_task_ids)} task(s) flagged for manual review."
+
     return {
         "slots_created": len(results),
         "tasks_scheduled": len(scheduled_task_ids),
         "scheduled_slots": results,
         "conflicts_resolved": conflict_result.get("conflicts_detected", 0),
-        "message": f"Successfully scheduled {len(scheduled_task_ids)} task(s) into {len(results)} slot(s)."
+        "flagged_tasks": list(flagged_task_ids),
+        "message": msg
     }

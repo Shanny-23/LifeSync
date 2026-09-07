@@ -191,6 +191,7 @@ class ScheduleGenerationResponse(BaseModel):
     tasks_scheduled: int
     scheduled_slots: list[ScheduledSlotResponse]
     conflicts_resolved: int = 0
+    flagged_tasks: list[int] = []
     message: str = "AI schedule generated successfully."
 
 

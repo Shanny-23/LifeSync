@@ -145,12 +145,13 @@ def run_scheduler_tests():
         mock_resp = MagicMock()
         mock_resp.content = [MagicMock(text=mock_claude_json)]
 
+        AUTH_HEADERS = {"Authorization": "Bearer demo-token-demo_user_1"}
         with patch("anthropic.Anthropic") as MockAnthropic, \
              patch.dict("os.environ", {"ANTHROPIC_API_KEY": "sk-ant-test-key"}):
             instance = MockAnthropic.return_value
             instance.messages.create.return_value = mock_resp
 
-            gen_resp = client.post("/api/schedule/generate")
+            gen_resp = client.post("/api/schedule/generate", headers=AUTH_HEADERS)
             assert gen_resp.status_code == 200, f"Error: {gen_resp.text}"
             res_data = gen_resp.json()
             print(f"Schedule Generation Response: {res_data}")
@@ -173,7 +174,7 @@ def run_scheduler_tests():
         db.close()
 
         # 3c. Test GET /api/schedule
-        get_sched_resp = client.get("/api/schedule")
+        get_sched_resp = client.get("/api/schedule", headers=AUTH_HEADERS)
         assert get_sched_resp.status_code == 200
         sched_list = get_sched_resp.json()
         print(f"GET /api/schedule returned {len(sched_list)} active slot(s):")

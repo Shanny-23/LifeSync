@@ -76,13 +76,21 @@ export default function TaskDetailModal({
     >
       <div className="modal-card" style={{ maxWidth: '520px' }}>
         <div className="modal-header">
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
             <span className={`pill-eyebrow ${isHigh ? 'coral' : isMedium ? 'amber' : 'green'}`}>
               {task.urgency ? task.urgency.toUpperCase() : 'NORMAL'}
             </span>
             <span className="pill-eyebrow forest">
               {task.category || task.subject || 'Academic'}
             </span>
+            {task.status === 'needs_manual_review' && (
+              <span
+                className="pill-eyebrow"
+                style={{ background: '#FEE2E2', color: '#991B1B', border: '1px solid #FCA5A5', fontSize: '0.65rem' }}
+              >
+                ⚠️ Needs Manual Review
+              </span>
+            )}
           </div>
           <button type="button" className="modal-close-btn" onClick={onClose}>✕</button>
         </div>

@@ -8,8 +8,16 @@ from dotenv import load_dotenv
 
 import models
 from schemas import ScheduledSlotItem
+from services.groq_service import (
+    call_groq_chat,
+    clean_groq_json_response,
+    get_groq_api_key,
+    REASONING_MODEL
+)
+import logging
 
 load_dotenv()
+logger = logging.getLogger(__name__)
 
 MODEL_NAME = os.getenv("ANTHROPIC_MODEL", "claude-sonnet-4-6")
 DAY_START_TIME = time(8, 0)
@@ -92,7 +100,9 @@ def find_conflicting_event(
         )
     )
     if user_id is not None:
-        blocking_events_query = blocking_events_query.filter(models.Event.user_id == user_id)
+        blocking_events_query = blocking_events_query.filter(
+            (models.Event.user_id == user_id) | (models.Event.user_id == None)
+        )
     blocking_events = blocking_events_query.all()
 
     for ev in blocking_events:
@@ -134,7 +144,9 @@ def compute_non_conflicting_free_slots(
         )
     )
     if user_id is not None:
-        events_query = events_query.filter(models.Event.user_id == user_id)
+        events_query = events_query.filter(
+            (models.Event.user_id == user_id) | (models.Event.user_id == None)
+        )
     events = events_query.all()
 
     for ev in events:
@@ -151,7 +163,7 @@ def compute_non_conflicting_free_slots(
                 # Whole day is busy
                 daily_busy[ev_date].append((DAY_START_TIME, DAY_END_TIME))
             else:
-                daily_busy[ev_date].append((ev_start.time(), ev_end.time()))
+                daily_busy[ev_date].append((ev_start.time(), ev.end_datetime.time() if ev.end_datetime else DAY_END_TIME))
         else:
             if ev_start.time() == time(0, 0):
                 daily_busy[ev_date].append((DAY_START_TIME, DAY_END_TIME))
@@ -162,7 +174,9 @@ def compute_non_conflicting_free_slots(
     # 2. Already active scheduled slots (exclude the slot currently in conflict)
     active_slots_query = db.query(models.ScheduledSlot).filter(models.ScheduledSlot.status == "active")
     if user_id is not None:
-        active_slots_query = active_slots_query.filter(models.ScheduledSlot.user_id == user_id)
+        active_slots_query = active_slots_query.filter(
+            (models.ScheduledSlot.user_id == user_id) | (models.ScheduledSlot.user_id == None)
+        )
     if exclude_slot_id:
         active_slots_query = active_slots_query.filter(models.ScheduledSlot.id != exclude_slot_id)
     active_slots = active_slots_query.all()
@@ -217,13 +231,7 @@ def find_alternate_slot_for_task(
     if deadline_dt and deadline_dt.tzinfo:
         deadline_dt = deadline_dt.replace(tzinfo=None)
 
-    # 1. Try Anthropic Claude for intelligent placement if API key is set
-    api_key = os.getenv("ANTHROPIC_API_KEY")
-    if api_key and not api_key.startswith("test_"):
-        try:
-            import anthropic
-            client = anthropic.Anthropic(api_key=api_key)
-            prompt = f"""You need to reschedule ONE single task that had a calendar conflict.
+    prompt = f"""You need to reschedule ONE single task that had a calendar conflict.
 Task:
 {json.dumps({
     "task_id": task.id,
@@ -244,25 +252,108 @@ Return ONLY JSON matching:
   "scheduled_start_time": "HH:MM",
   "scheduled_end_time": "HH:MM"
 }}"""
-            res = client.messages.create(
-                model=MODEL_NAME,
-                max_tokens=500,
+
+    # 1. Try Groq with DeepSeek-R1 Distill (multi-constraint reasoning model)
+    ai_parsed_item = None
+    groq_key = get_groq_api_key()
+    if groq_key:
+        try:
+            raw = call_groq_chat(
+                prompt=f"You are an expert academic scheduler. Return ONLY valid JSON.\n\n{prompt}",
+                model=REASONING_MODEL,
                 temperature=0.0,
-                system="You are an academic scheduler. Return ONLY valid JSON.",
-                messages=[{"role": "user", "content": prompt}]
+                custom_key=groq_key
             )
-            raw = res.content[0].text
-            cleaned = re.sub(r"^```(?:json)?\s*", "", raw.strip())
-            cleaned = re.sub(r"\s*```$", "", cleaned).strip()
-            item = json.loads(cleaned)
-            slot_item = ScheduledSlotItem.model_validate(item)
-            return {
-                "scheduled_date": slot_item.scheduled_date,
-                "start_time": slot_item.scheduled_start_time,
-                "end_time": slot_item.scheduled_end_time
-            }
-        except Exception:
-            pass  # Fall through to deterministic gap finder
+            cleaned = clean_groq_json_response(raw)
+            ai_parsed_item = json.loads(cleaned)
+        except Exception as e:
+            logger.warning("Groq DeepSeek R1 alternate slot resolution error: %s", e)
+
+    # 2. Try Anthropic Claude if Groq was not available or failed
+    if not ai_parsed_item:
+        api_key = os.getenv("ANTHROPIC_API_KEY")
+        if api_key and not api_key.startswith("test_"):
+            try:
+                import anthropic
+                client = anthropic.Anthropic(api_key=api_key)
+                res = client.messages.create(
+                    model=MODEL_NAME,
+                    max_tokens=500,
+                    temperature=0.0,
+                    system="You are an academic scheduler. Return ONLY valid JSON.",
+                    messages=[{"role": "user", "content": prompt}]
+                )
+                raw = res.content[0].text
+                cleaned = re.sub(r"^```(?:json)?\s*", "", raw.strip())
+                cleaned = re.sub(r"\s*```$", "", cleaned).strip()
+                ai_parsed_item = json.loads(cleaned)
+            except Exception:
+                pass
+
+    # 3. Strict Validation on AI Proposed Alternate Slot
+    if ai_parsed_item and isinstance(ai_parsed_item, dict):
+        try:
+            slot_item = ScheduledSlotItem.model_validate(ai_parsed_item)
+            # 1. Verify task_id matches task.id and exists
+            if slot_item.task_id != task.id:
+                logger.warning(
+                    "Conflict resolver validation failed: AI hallucinated task_id %s (expected %s). Discarding slot.",
+                    slot_item.task_id, task.id
+                )
+            else:
+                cand_d = datetime.strptime(slot_item.scheduled_date.strip(), "%Y-%m-%d").date()
+                cand_st = datetime.strptime(slot_item.scheduled_start_time.strip(), "%H:%M").time()
+                cand_et = datetime.strptime(slot_item.scheduled_end_time.strip(), "%H:%M").time()
+                cand_start_dt = datetime.combine(cand_d, cand_st)
+                cand_end_dt = datetime.combine(cand_d, cand_et)
+
+                # 2. Verify falls within task's actual deadline window
+                exceeds_deadline = False
+                if deadline_dt and cand_end_dt > deadline_dt:
+                    exceeds_deadline = True
+                    logger.warning(
+                        "Conflict resolver validation failed: AI proposed slot %s %s-%s exceeds actual deadline %s. Rejecting slot.",
+                        cand_d, cand_st, cand_et, deadline_dt
+                    )
+
+                # 3. Hard assertion: Verify no overlap with any fixed event (class, exam, fest, holiday)
+                events_q = db.query(models.Event).filter(models.Event.status != "cancelled")
+                if user_id is not None:
+                    events_q = events_q.filter((models.Event.user_id == user_id) | (models.Event.user_id == None))
+                all_events = events_q.all()
+                overlaps_fixed = any(is_event_overlapping(cand_start_dt, cand_end_dt, ev) for ev in all_events)
+                if overlaps_fixed:
+                    logger.warning("Conflict resolver hard assertion failed: AI proposed slot overlaps a fixed event. Rejecting slot.")
+
+                # Hard assertion: Verify no overlap with other active scheduled slots (excluding conflicted_slot)
+                active_q = db.query(models.ScheduledSlot).filter(
+                    models.ScheduledSlot.status == "active",
+                    models.ScheduledSlot.id != conflicted_slot.id
+                )
+                if user_id is not None:
+                    active_q = active_q.filter(models.ScheduledSlot.user_id == user_id)
+                overlaps_active = False
+                for s in active_q.all():
+                    try:
+                        s_d = datetime.strptime(s.scheduled_date, "%Y-%m-%d").date()
+                        s_st = datetime.strptime(s.start_time, "%H:%M").time()
+                        s_et = datetime.strptime(s.end_time, "%H:%M").time()
+                        s_start_dt = datetime.combine(s_d, s_st)
+                        s_end_dt = datetime.combine(s_d, s_et)
+                        if cand_start_dt < s_end_dt and cand_end_dt > s_start_dt:
+                            overlaps_active = True
+                            break
+                    except Exception:
+                        continue
+
+                if not exceeds_deadline and not overlaps_fixed and not overlaps_active and cand_end_dt > cand_start_dt:
+                    return {
+                        "scheduled_date": slot_item.scheduled_date,
+                        "start_time": slot_item.scheduled_start_time,
+                        "end_time": slot_item.scheduled_end_time
+                    }
+        except Exception as val_err:
+            logger.warning("Conflict resolver AI proposed slot validation error: %s", val_err)
 
     # 2. Deterministic Fallback: pick earliest available free gap of >= 45 mins before deadline
     for day_info in free_slots_by_day:
@@ -305,7 +396,9 @@ def resolve_schedule_conflicts(
         .filter(models.ScheduledSlot.status == "active")
     )
     if user_id is not None:
-        active_slots_query = active_slots_query.filter(models.ScheduledSlot.user_id == user_id)
+        active_slots_query = active_slots_query.filter(
+            (models.ScheduledSlot.user_id == user_id) | (models.ScheduledSlot.user_id == None)
+        )
     active_slots = active_slots_query.all()
 
     conflicts_detected = 0
@@ -367,10 +460,10 @@ def resolve_schedule_conflicts(
             conflicts_rescheduled += 1
             logs_created.append(log_entry)
         else:
-            # No alternative slot available: mark slot conflict_removed and revert task to pending
+            # No alternative slot available: mark slot conflict_removed and flag task for manual review
             slot.status = "conflict_removed"
             if task:
-                task.status = "pending"
+                task.status = "needs_manual_review"
 
             log_entry = models.ConflictLog(
                 slot_id=slot.id,
@@ -380,13 +473,13 @@ def resolve_schedule_conflicts(
                 original_date=orig_date,
                 original_start_time=orig_start,
                 original_end_time=orig_end,
-                resolved_action="removed_no_slot",
+                resolved_action="needs_manual_review",
                 new_date=None,
                 new_start_time=None,
                 new_end_time=None,
                 notes=(
                     f"Slot for '{task_title}' conflicted with {conflicting_ev.type} '{conflicting_ev.title}'. "
-                    f"No conflict-free slot found before deadline. Reverted task status to pending."
+                    f"No conflict-free slot found before deadline window. Marked task as 'needs_manual_review'."
                 )
             )
             db.add(log_entry)

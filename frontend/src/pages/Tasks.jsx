@@ -287,13 +287,21 @@ export default function Tasks() {
                   title="Click to view details or edit"
                 >
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
                       <span className={`pill-eyebrow ${isHigh ? 'coral' : isMedium ? 'amber' : 'neutral'}`}>
                         {task.urgency ? task.urgency.toUpperCase() : 'NORMAL'}
                       </span>
                       <span className="pill-eyebrow forest">
                         {task.category || task.subject || 'General'}
                       </span>
+                      {task.status === 'needs_manual_review' && (
+                        <span
+                          className="pill-eyebrow"
+                          style={{ background: '#FEE2E2', color: '#991B1B', border: '1px solid #FCA5A5', fontSize: '0.65rem' }}
+                        >
+                          ⚠️ Needs Manual Review
+                        </span>
+                      )}
                     </div>
 
                     <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>

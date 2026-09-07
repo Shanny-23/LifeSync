@@ -162,5 +162,15 @@ def call_groq_chat(
                 logger.error("Groq API 429 Rate Limit exceeded after retries: %s", rle)
                 raise
         except Exception as exc:
+            if "model_decommissioned" in str(exc).lower() and model != EXTRACTION_MODEL:
+                logger.warning("Groq model '%s' decommissioned. Falling back to '%s'.", model, EXTRACTION_MODEL)
+                return call_groq_chat(
+                    prompt=prompt,
+                    model=EXTRACTION_MODEL,
+                    temperature=temperature,
+                    system_prompt=system_prompt,
+                    custom_key=custom_key,
+                    max_retries=0
+                )
             logger.error("Groq API request failed with error: %s", exc)
             raise

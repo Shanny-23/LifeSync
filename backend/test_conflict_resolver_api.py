@@ -192,12 +192,13 @@ def run_conflict_resolver_tests():
         # 7. Test API Endpoints
         # -------------------------------------------------------------
         print("\n--- 7. Testing API Endpoints ---")
-        post_resp = client.post("/api/schedule/resolve-conflicts?days_ahead=7")
+        AUTH_HEADERS = {"Authorization": "Bearer demo-token-demo_user_1"}
+        post_resp = client.post("/api/schedule/resolve-conflicts?days_ahead=7", headers=AUTH_HEADERS)
         assert post_resp.status_code == 200
         post_data = post_resp.json()
         print("POST /api/schedule/resolve-conflicts response:", post_data["message"])
 
-        get_resp = client.get("/api/schedule/conflicts")
+        get_resp = client.get("/api/schedule/conflicts", headers=AUTH_HEADERS)
         assert get_resp.status_code == 200
         get_data = get_resp.json()
         print(f"GET /api/schedule/conflicts returned {len(get_data)} logged conflict(s).")
