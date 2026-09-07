@@ -1,7 +1,10 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { createTask } from '../api';
+import gsap, { animateModalEnter, animateModalExit } from '../lib/gsap';
 
 export default function NewTaskModal({ isOpen, onClose, onTaskCreated }) {
+  const [shouldRender, setShouldRender] = useState(isOpen);
+  const [isClosing, setIsClosing] = useState(false);
   const [title, setTitle] = useState('');
   const [subject, setSubject] = useState('CS101');
   const [customSubject, setCustomSubject] = useState('');
@@ -14,11 +17,24 @@ export default function NewTaskModal({ isOpen, onClose, onTaskCreated }) {
   const [touched, setTouched] = useState(false);
 
   const titleInputRef = useRef(null);
+  const backdropRef = useRef(null);
   const modalRef = useRef(null);
 
-  // Focus input when opened & reset state
+  const handleClose = useCallback(() => {
+    if (isClosing) return;
+    setIsClosing(true);
+    animateModalExit(backdropRef.current, modalRef.current, () => {
+      setIsClosing(false);
+      setShouldRender(false);
+      onClose();
+    });
+  }, [isClosing, onClose]);
+
+  // Sync shouldRender with isOpen prop
   useEffect(() => {
     if (isOpen) {
+      setShouldRender(true);
+      setIsClosing(false);
       setTitle('');
       setSubject('CS101');
       setCustomSubject('');
@@ -29,27 +45,38 @@ export default function NewTaskModal({ isOpen, onClose, onTaskCreated }) {
       setIsSubmitting(false);
       setErrorMessage(null);
       setTouched(false);
+    } else if (shouldRender && !isClosing) {
+      handleClose();
+    }
+  }, [isOpen]);
 
-      setTimeout(() => {
+  // Animate enter when shouldRender becomes true
+  useEffect(() => {
+    if (!shouldRender || isClosing) return;
+
+    const ctx = gsap.context(() => {
+      animateModalEnter(backdropRef.current, modalRef.current, () => {
         if (titleInputRef.current) {
           titleInputRef.current.focus();
         }
-      }, 50);
-    }
-  }, [isOpen]);
+      });
+    }, backdropRef);
+
+    return () => ctx.revert();
+  }, [shouldRender]);
 
   // Handle Escape key
   useEffect(() => {
     const handleKeyDown = (e) => {
-      if (e.key === 'Escape' && isOpen) {
-        onClose();
+      if (e.key === 'Escape' && shouldRender && !isClosing) {
+        handleClose();
       }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isOpen, onClose]);
+  }, [shouldRender, isClosing, handleClose]);
 
-  if (!isOpen) return null;
+  if (!shouldRender) return null;
 
   const isTitleValid = title.trim().length > 0;
   const resolvedSubject = subject === 'custom' ? (customSubject.trim() || 'General') : subject;
@@ -78,20 +105,7 @@ export default function NewTaskModal({ isOpen, onClose, onTaskCreated }) {
     };
 
     try {
-      let createdTask = null;
-      try {
-        createdTask = await createTask(taskPayload);
-      } catch (err) {
-        console.warn('Backend createTask failed, falling back to client-generated record:', err);
-        // Fallback for resilient offline experience
-        createdTask = {
-          id: Date.now(),
-          ...taskPayload,
-          status: 'pending',
-          completed: false,
-          created_at: new Date().toISOString(),
-        };
-      }
+      const createdTask = await createTask(taskPayload);
 
       // Notify parent & dispatch global event for active pages to react
       if (onTaskCreated) {
@@ -101,9 +115,12 @@ export default function NewTaskModal({ isOpen, onClose, onTaskCreated }) {
         new CustomEvent('lifesync:task-created', { detail: createdTask })
       );
 
-      onClose();
+      handleClose();
     } catch (err) {
-      setErrorMessage(err.message || 'Failed to create task. Please try again.');
+      console.error('Backend createTask failed:', err);
+      const detail = err.response?.data?.detail;
+      const message = typeof detail === 'string' ? detail : err.message || 'Failed to create task on server. Please try again.';
+      setErrorMessage(message);
     } finally {
       setIsSubmitting(false);
     }
@@ -111,9 +128,10 @@ export default function NewTaskModal({ isOpen, onClose, onTaskCreated }) {
 
   return (
     <div 
+      ref={backdropRef}
       className="modal-backdrop" 
       onClick={(e) => {
-        if (e.target === e.currentTarget) onClose();
+        if (e.target === e.currentTarget) handleClose();
       }}
       role="dialog"
       aria-modal="true"
@@ -131,7 +149,7 @@ export default function NewTaskModal({ isOpen, onClose, onTaskCreated }) {
           <button 
             type="button" 
             className="modal-close-btn" 
-            onClick={onClose}
+            onClick={handleClose}
             aria-label="Close modal"
           >
             ✕
@@ -290,7 +308,7 @@ export default function NewTaskModal({ isOpen, onClose, onTaskCreated }) {
             <button
               type="button"
               className="btn btn-secondary btn-sm"
-              onClick={onClose}
+              onClick={handleClose}
               disabled={isSubmitting}
             >
               Cancel

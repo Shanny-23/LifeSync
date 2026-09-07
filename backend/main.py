@@ -151,7 +151,14 @@ def process_upload_pipeline(upload_id: int):
         record.status = "normalized"
         db.commit()
 
-        # 4. Mark done
+        # 4. Automatically recalculate priorities and schedule study blocks for pending tasks
+        try:
+            recalculate_all_priorities(db=db, user_id=record.user_id)
+            generate_ai_schedule(days_ahead=14, user_id=record.user_id, db=db)
+        except Exception as schedule_err:
+            pass
+
+        # 5. Mark done
         record.status = "done"
         record.error_message = None
         db.commit()
@@ -267,7 +274,10 @@ def get_upload_status(
     Returns the processing status of an upload:
     'pending' -> 'parsed' -> 'extracted' -> 'normalized' -> 'done' (or 'failed' with error_message).
     """
-    record = db.query(models.Upload).filter(models.Upload.id == upload_id, models.Upload.user_id == current_user.id).first()
+    record = db.query(models.Upload).filter(
+        models.Upload.id == upload_id,
+        (models.Upload.user_id == current_user.id) | (models.Upload.user_id == None)
+    ).first()
     if not record:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -306,7 +316,9 @@ def list_uploads(
     current_user: models.User = Depends(get_current_user)
 ):
     """Retrieve all uploaded documents for current user, optionally filtered by type."""
-    query = db.query(models.Upload).filter(models.Upload.user_id == current_user.id)
+    query = db.query(models.Upload).filter(
+        (models.Upload.user_id == current_user.id) | (models.Upload.user_id == None)
+    )
     if type:
         query = query.filter(models.Upload.type == type.value)
     return query.order_by(models.Upload.upload_timestamp.desc()).all()
@@ -324,7 +336,10 @@ def get_upload_by_id(
     current_user: models.User = Depends(get_current_user)
 ):
     """Retrieve details for a specific upload by ID."""
-    record = db.query(models.Upload).filter(models.Upload.id == upload_id, models.Upload.user_id == current_user.id).first()
+    record = db.query(models.Upload).filter(
+        models.Upload.id == upload_id,
+        (models.Upload.user_id == current_user.id) | (models.Upload.user_id == None)
+    ).first()
     if not record:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -348,7 +363,10 @@ def parse_upload_document(
     Extracts raw text from an uploaded document (PDF via pdfplumber/pypdf or image via Tesseract OCR).
     Updates the upload record's raw_text column and sets status to 'parsed' (or 'failed' on error).
     """
-    record = db.query(models.Upload).filter(models.Upload.id == upload_id, models.Upload.user_id == current_user.id).first()
+    record = db.query(models.Upload).filter(
+        models.Upload.id == upload_id,
+        (models.Upload.user_id == current_user.id) | (models.Upload.user_id == None)
+    ).first()
     if not record:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -358,42 +376,36 @@ def parse_upload_document(
     full_path = BASE_DIR / record.filepath
     if not full_path.exists():
         record.status = "failed"
+        record.error_message = f"File not found on server: {record.filepath}"
         db.commit()
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Stored file for upload #{upload_id} does not exist at '{record.filepath}'."
+            detail=f"Physical file '{record.filepath}' does not exist on the server."
         )
 
     try:
         extracted_text = extract_text(str(full_path))
         record.raw_text = extracted_text
         record.status = "parsed"
+        record.error_message = None
         db.commit()
         db.refresh(record)
-
-        return UploadResponse(
-            id=record.id,
-            type=record.type,
-            filename=record.filename,
-            filepath=record.filepath,
-            upload_timestamp=record.upload_timestamp,
-            status=record.status,
-            raw_text=record.raw_text,
-            message="Document text successfully extracted."
-        )
+        return record
     except ParserError as pe:
         record.status = "failed"
+        record.error_message = str(pe)
         db.commit()
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
-            detail=f"Text extraction failed: {str(pe)}"
+            detail=f"Failed to parse document: {str(pe)}"
         )
     except Exception as exc:
         record.status = "failed"
+        record.error_message = f"Unexpected error during text extraction: {str(exc)}"
         db.commit()
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Unexpected error while extracting text: {str(exc)}"
+            detail=f"Internal error processing file: {str(exc)}"
         )
 
 
@@ -402,9 +414,9 @@ def parse_upload_document(
     response_model=ExtractedDataResponse,
     status_code=status.HTTP_201_CREATED,
     tags=["Extraction"],
-    summary="Extract structured entities using Claude (claude-sonnet-4-6)"
+    summary="Trigger AI structured data extraction using Claude 3.7 Sonnet"
 )
-def extract_document_entities(
+def extract_document_data(
     upload_id: int,
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user)
@@ -413,7 +425,10 @@ def extract_document_entities(
     Extracts structured entities matching the upload type using Anthropic Claude (claude-sonnet-4-6).
     Validates output against Pydantic models per type and persists rows into the 'extracted_data' table.
     """
-    record = db.query(models.Upload).filter(models.Upload.id == upload_id, models.Upload.user_id == current_user.id).first()
+    record = db.query(models.Upload).filter(
+        models.Upload.id == upload_id,
+        (models.Upload.user_id == current_user.id) | (models.Upload.user_id == None)
+    ).first()
     if not record:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -490,7 +505,10 @@ def get_extracted_data_for_upload(
     current_user: models.User = Depends(get_current_user)
 ):
     """Retrieve all structured extraction entries associated with an upload."""
-    upload = db.query(models.Upload).filter(models.Upload.id == upload_id, models.Upload.user_id == current_user.id).first()
+    upload = db.query(models.Upload).filter(
+        models.Upload.id == upload_id,
+        (models.Upload.user_id == current_user.id) | (models.Upload.user_id == None)
+    ).first()
     if not upload:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -522,7 +540,10 @@ def normalize_document_data(
     and normalizes into 'events' or 'tasks' table.
     Prevents duplicates on re-upload via natural key deduplication.
     """
-    upload = db.query(models.Upload).filter(models.Upload.id == upload_id, models.Upload.user_id == current_user.id).first()
+    upload = db.query(models.Upload).filter(
+        models.Upload.id == upload_id,
+        (models.Upload.user_id == current_user.id) | (models.Upload.user_id == None)
+    ).first()
     if not upload:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -578,10 +599,13 @@ def generate_exam_study_plan_endpoint(
     Ensures sessions respect free time (no class overlaps), tags each slot with slot_type='study_session',
     and passes candidate sessions through the conflict resolver.
     """
-    task = db.query(models.Task).filter(models.Task.id == task_id, models.Task.user_id == current_user.id).first()
+    task = db.query(models.Task).filter(
+        models.Task.id == task_id,
+        (models.Task.user_id == current_user.id) | (models.Task.user_id == None)
+    ).first()
     if not task:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
+            status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Task with id {task_id} not found."
         )
 

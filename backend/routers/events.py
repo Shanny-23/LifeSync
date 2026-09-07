@@ -85,8 +85,10 @@ def get_events(
             detail=f"'from' date ({from_date}) cannot be after 'to' date ({to_date})."
         )
 
-    # 2. Build query scoped to current user
-    query = db.query(models.Event).filter(models.Event.user_id == current_user.id)
+    # 2. Build query scoped to current user or campus-wide events
+    query = db.query(models.Event).filter(
+        (models.Event.user_id == current_user.id) | (models.Event.user_id == None)
+    )
 
     if type_filter and type_filter.lower() != "all":
         # Handle 'class' vs 'class_session'
@@ -146,7 +148,7 @@ def get_event_by_id(
     """Retrieve a single event by ID for the authenticated user."""
     ev = db.query(models.Event).filter(
         models.Event.id == event_id,
-        models.Event.user_id == current_user.id
+        (models.Event.user_id == current_user.id) | (models.Event.user_id == None)
     ).first()
     if not ev:
         raise HTTPException(

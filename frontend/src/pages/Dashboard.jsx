@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import AtAGlanceMetrics from '../components/AtAGlanceMetrics';
 import WeekStrip from '../components/WeekStrip';
 import EscalatedDeadlineCard from '../components/EscalatedDeadlineCard';
@@ -11,14 +11,37 @@ import ReadinessGauge from '../components/ReadinessGauge';
 import WeeklyStudyChart from '../components/WeeklyStudyChart';
 import { getTasks, recalculatePriorities } from '../api';
 import { useToast } from '../context/ToastContext';
+import { useWorkspace } from '../context/WorkspaceContext';
+import gsap, { prefersReducedMotion } from '../lib/gsap';
 
 export default function Dashboard() {
   const toast = useToast();
+  const { activeWorkspace, filterByWorkspace } = useWorkspace();
+  const dashboardRef = useRef(null);
   const [tasks, setTasks] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [isRecalculating, setIsRecalculating] = useState(false);
   const [recalcFeedback, setRecalcFeedback] = useState(null);
+  const [selectedDayObj, setSelectedDayObj] = useState(null);
+  const [isYogaDone, setIsYogaDone] = useState(() => {
+    try {
+      return localStorage.getItem('lifesync_habit_yoga') === 'true';
+    } catch {
+      return false;
+    }
+  });
+
+  const handleToggleYoga = () => {
+    const next = !isYogaDone;
+    setIsYogaDone(next);
+    try {
+      localStorage.setItem('lifesync_habit_yoga', String(next));
+    } catch {
+      // LocalStorage fallback
+    }
+    toast.success(next ? '🧘 Morning Routine marked Complete! +15 XP' : 'Morning Routine reset to pending.');
+  };
 
   // Modals
   const [isFocusModalOpen, setIsFocusModalOpen] = useState(false);
@@ -104,25 +127,64 @@ export default function Dashboard() {
     toast.info(`Status for "${item.title}" updated to: ${nextStatus.toUpperCase()}`);
   };
 
+  // Stagger entrance on mount & after load
+  useEffect(() => {
+    if (loading || prefersReducedMotion() || !dashboardRef.current) return;
+    const ctx = gsap.context(() => {
+      gsap.fromTo(
+        '.metric-card, .collab-card',
+        { opacity: 0, y: 16 },
+        {
+          opacity: 1,
+          y: 0,
+          duration: 0.32,
+          stagger: 0.05,
+          ease: 'power2.out',
+        }
+      );
+    }, dashboardRef);
+    return () => ctx.revert();
+  }, [loading]);
+
+  // Smooth workspace transition
+  useEffect(() => {
+    if (!dashboardRef.current || prefersReducedMotion()) return;
+    const ctx = gsap.context(() => {
+      gsap.fromTo(
+        dashboardRef.current,
+        { opacity: 0.8 },
+        { opacity: 1, duration: 0.2, ease: 'power1.out' }
+      );
+    }, dashboardRef);
+    return () => ctx.revert();
+  }, [activeWorkspace]);
+
+  // Workspace-filtered tasks
+  const scopedTasks = filterByWorkspace(tasks);
+
   // Metrics computation
-  const totalCount = tasks.length;
-  const highCount = tasks.filter((t) => t.urgency === 'high' || (t.priority_score || 0) >= 75).length;
-  const mediumCount = tasks.filter((t) => t.urgency === 'medium' || ((t.priority_score || 0) >= 40 && (t.priority_score || 0) < 75)).length;
-  const lowCount = tasks.filter((t) => t.urgency === 'low' || (t.priority_score !== undefined && t.priority_score < 40)).length;
+  const totalCount = scopedTasks.length;
+  const highCount = scopedTasks.filter((t) => t.urgency === 'high' || (t.priority_score || 0) >= 75).length;
+  const mediumCount = scopedTasks.filter((t) => t.urgency === 'medium' || ((t.priority_score || 0) >= 40 && (t.priority_score || 0) < 75)).length;
+  const lowCount = scopedTasks.filter((t) => t.urgency === 'low' || (t.priority_score !== undefined && t.priority_score < 40)).length;
 
   // Urgent priorities list (top priority tasks)
-  const urgentPriorities = [...tasks]
+  const urgentPriorities = [...scopedTasks]
     .filter((t) => !t.completed && t.status !== 'completed')
     .sort((a, b) => (b.priority_score || 0) - (a.priority_score || 0))
     .slice(0, 4);
 
   // Highest priority task for escalated banner
-  const highestPriorityTask = urgentPriorities[0] || tasks[0];
+  const highestPriorityTask = urgentPriorities[0] || scopedTasks[0];
+
+  // Dynamic readiness calculation
+  const completedCount = scopedTasks.filter((t) => t.completed || t.status === 'completed').length;
+  const computedReadiness = Math.min(98, Math.max(45, Math.round(70 + (completedCount / (totalCount || 1)) * 25 - highCount * 2)));
 
   return (
     <div className="workspace-body">
       {/* Primary Column */}
-      <div className="workspace-primary-col">
+      <div className="workspace-primary-col" ref={dashboardRef}>
         {/* Top bar info */}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '12px' }}>
           <div>
@@ -228,11 +290,11 @@ export default function Dashboard() {
         </div>
 
         {/* 1. At a Glance Metrics Row */}
-        <AtAGlanceMetrics tasks={tasks} />
+        <AtAGlanceMetrics tasks={scopedTasks} />
 
         {/* 1.5 Figma Academic Readiness & Weekly Study Breakdown Grid */}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '16px', margin: '8px 0' }}>
-          <ReadinessGauge score={73} />
+          <ReadinessGauge score={computedReadiness} />
           <WeeklyStudyChart />
         </div>
 
@@ -293,33 +355,59 @@ export default function Dashboard() {
         </div>
 
         {/* 3. Week Strip */}
-        <WeekStrip />
+        <WeekStrip onSelectDate={(day) => setSelectedDayObj(day)} />
 
         {/* 4. Upcoming Timeline / Today's Schedule & Routine */}
         <div className="collab-card">
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
             <span className="rail-widget-title" style={{ margin: 0 }}>Upcoming Timeline & Routine</span>
-            <span className="pill-eyebrow green">Today's Focus</span>
+            <span className="pill-eyebrow green">
+              {selectedDayObj ? `${selectedDayObj.name} • ${selectedDayObj.label}` : "Today's Focus"}
+            </span>
           </div>
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 12px', background: '#F0FDF4', borderRadius: '8px', borderLeft: '4px solid #16A34A' }}>
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                padding: '10px 12px',
+                background: isYogaDone ? '#F0FDF4' : '#FFFBEB',
+                borderRadius: '8px',
+                borderLeft: `4px solid ${isYogaDone ? '#16A34A' : '#D97706'}`,
+              }}
+            >
               <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                 <span>🧘</span>
                 <div>
-                  <div style={{ fontSize: '0.84rem', fontWeight: 700 }}>Morning Yoga Session & Reset</div>
-                  <div style={{ fontSize: '0.72rem', color: '#166534' }}>08:00 AM • Routine Habit</div>
+                  <div style={{ fontSize: '0.84rem', fontWeight: 700, textDecoration: isYogaDone ? 'line-through' : 'none', color: isYogaDone ? '#166534' : '#92400E' }}>
+                    Morning Yoga Session & Reset
+                  </div>
+                  <div style={{ fontSize: '0.72rem', color: isYogaDone ? '#166534' : '#B45309' }}>
+                    08:00 AM • Routine Habit
+                  </div>
                 </div>
               </div>
-              <span className="pill-eyebrow green">Done ✓</span>
+              <button
+                type="button"
+                className={`btn btn-xs ${isYogaDone ? 'btn-secondary' : 'btn-primary'}`}
+                onClick={handleToggleYoga}
+              >
+                {isYogaDone ? 'Done ✓' : 'Mark Done'}
+              </button>
             </div>
 
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 12px', background: '#EFF6FF', borderRadius: '8px', borderLeft: '4px solid #2563EB' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                 <span>🎯</span>
                 <div>
-                  <div style={{ fontSize: '0.84rem', fontWeight: 700 }}>Study Session • CS101 Algorithm Analysis</div>
-                  <div style={{ fontSize: '0.72rem', color: '#1E40AF' }}>1:00 PM - 1:45 PM • Spaced Repetition Block</div>
+                  <div style={{ fontSize: '0.84rem', fontWeight: 700 }}>
+                    {highestPriorityTask ? `Study Session • ${highestPriorityTask.task || highestPriorityTask.title}` : 'Study Session • CS101 Algorithm Analysis'}
+                  </div>
+                  <div style={{ fontSize: '0.72rem', color: '#1E40AF' }}>
+                    1:00 PM - 1:45 PM • {highestPriorityTask?.subject || 'CS101'} Focus Block
+                  </div>
                 </div>
               </div>
               <button

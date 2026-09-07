@@ -12,10 +12,13 @@ logger = logging.getLogger(__name__)
 
 # Specialized model assignments
 # 1. Fast, structured extraction (course circulars, exam dates, syllabus topics, timetable parsing)
-EXTRACTION_MODEL = os.getenv("GROQ_EXTRACTION_MODEL", "llama-3.3-70b-versatile")
+EXTRACTION_MODEL = os.getenv("GROQ_EXTRACTION_MODEL", "openai/gpt-oss-120b")
 
 # 2. Multi-constraint reasoning & scheduling (schedule optimization, priority reasoning, conflict resolution)
-REASONING_MODEL = os.getenv("GROQ_REASONING_MODEL", "deepseek-r1-distill-llama-70b")
+REASONING_MODEL = os.getenv("GROQ_REASONING_MODEL", "openai/gpt-oss-120b")
+
+# 3. Fast, lightweight fallback model
+FALLBACK_MODEL = "openai/gpt-oss-20b"
 
 GROQ_BASE_URL = "https://api.groq.com/openai/v1"
 
@@ -162,11 +165,13 @@ def call_groq_chat(
                 logger.error("Groq API 429 Rate Limit exceeded after retries: %s", rle)
                 raise
         except Exception as exc:
-            if "model_decommissioned" in str(exc).lower() and model != EXTRACTION_MODEL:
-                logger.warning("Groq model '%s' decommissioned. Falling back to '%s'.", model, EXTRACTION_MODEL)
+            err_str = str(exc).lower()
+            if ("model_decommissioned" in err_str or "model_not_found" in err_str or "does not exist" in err_str) and model != FALLBACK_MODEL:
+                fallback = FALLBACK_MODEL if model == EXTRACTION_MODEL else EXTRACTION_MODEL
+                logger.warning("Groq model '%s' unavailable (%s). Falling back to '%s'.", model, exc, fallback)
                 return call_groq_chat(
                     prompt=prompt,
-                    model=EXTRACTION_MODEL,
+                    model=fallback,
                     temperature=temperature,
                     system_prompt=system_prompt,
                     custom_key=custom_key,

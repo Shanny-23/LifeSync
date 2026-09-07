@@ -1,5 +1,5 @@
+from datetime import datetime, timezone, timedelta
 import os
-from datetime import datetime, timedelta
 from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import RedirectResponse
@@ -51,7 +51,7 @@ def google_auth(
             db.add(token_rec)
         token_rec.access_token = "mock-google-calendar-access-token"
         token_rec.scopes = "https://www.googleapis.com/auth/calendar.events.readonly"
-        token_rec.updated_at = datetime.utcnow()
+        token_rec.updated_at = datetime.now(timezone.utc)
         db.commit()
 
         return RedirectResponse(url=f"{frontend_url}/upload?google_connected=true")
@@ -89,7 +89,7 @@ def google_callback(
             token_rec = models.UserGoogleToken(user_id=user_id)
             db.add(token_rec)
         token_rec.access_token = "google-token-" + (code[:8] if code else "active")
-        token_rec.updated_at = datetime.utcnow()
+        token_rec.updated_at = datetime.now(timezone.utc)
         db.commit()
 
     return RedirectResponse(url=f"{frontend_url}/upload?google_connected=true")
@@ -121,12 +121,14 @@ def google_sync_import(
     if not token_rec or not token_rec.access_token:
         raise HTTPException(status_code=401, detail="Google Calendar not connected. Please authenticate first.")
 
-    # Sample Google Calendar events mapped to LifeSync task shape
     now = datetime.now()
     sample_events = [
         {
             "task": "Design System Pod Sync",
             "scheduledSlot": f"{now.strftime('%Y-%m-%d')} 13:30 - 14:45",
+            "scheduled_date": now.strftime('%Y-%m-%d'),
+            "start_time": "13:30",
+            "end_time": "14:45",
             "deadline": f"{now.strftime('%Y-%m-%d')} 14:45",
             "category": "Google Calendar",
             "urgency": "medium",
@@ -135,6 +137,9 @@ def google_sync_import(
         {
             "task": "CS101 Paper Office Hours",
             "scheduledSlot": f"{(now + timedelta(days=1)).strftime('%Y-%m-%d')} 11:00 - 12:00",
+            "scheduled_date": (now + timedelta(days=1)).strftime('%Y-%m-%d'),
+            "start_time": "11:00",
+            "end_time": "12:00",
             "deadline": f"{(now + timedelta(days=1)).strftime('%Y-%m-%d')} 12:00",
             "category": "Google Calendar",
             "urgency": "high",
@@ -143,6 +148,9 @@ def google_sync_import(
         {
             "task": "Weekly Lab Retrospective",
             "scheduledSlot": f"{(now + timedelta(days=2)).strftime('%Y-%m-%d')} 15:00 - 16:30",
+            "scheduled_date": (now + timedelta(days=2)).strftime('%Y-%m-%d'),
+            "start_time": "15:00",
+            "end_time": "16:30",
             "deadline": f"{(now + timedelta(days=2)).strftime('%Y-%m-%d')} 16:30",
             "category": "Google Calendar",
             "urgency": "low",
@@ -162,19 +170,47 @@ def google_sync_import(
                 .first()
             )
             if existing:
-                existing.scheduled_slot = ev["scheduledSlot"]
+                existing.status = "scheduled"
+                task_obj = existing
                 updated += 1
             else:
                 new_t = models.Task(
                     user_id=current_user.id,
                     title=ev["task"],
+                    type=ev.get("type", "event"),
                     deadline=datetime.strptime(ev["deadline"], "%Y-%m-%d %H:%M") if ev.get("deadline") else None,
                     subject=ev["category"],
                     status="scheduled",
                     priority_score=80 if ev["urgency"] == "high" else 55
                 )
                 db.add(new_t)
+                db.commit()
+                db.refresh(new_t)
+                task_obj = new_t
                 imported += 1
+
+            # Ensure ScheduledSlot exists for the task
+            existing_slot = (
+                db.query(models.ScheduledSlot)
+                .filter(
+                    models.ScheduledSlot.task_id == task_obj.id,
+                    models.ScheduledSlot.scheduled_date == ev["scheduled_date"],
+                    models.ScheduledSlot.user_id == current_user.id
+                )
+                .first()
+            )
+            if not existing_slot:
+                slot = models.ScheduledSlot(
+                    user_id=current_user.id,
+                    task_id=task_obj.id,
+                    scheduled_date=ev["scheduled_date"],
+                    start_time=ev["start_time"],
+                    end_time=ev["end_time"],
+                    slot_type="study_session",
+                    status="active"
+                )
+                db.add(slot)
+
         db.commit()
 
         return {

@@ -29,7 +29,11 @@ class UserGoogleToken(Base):
 
     id = Column(Integer, primary_key=True, index=True, autoincrement=True)
     user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), unique=True, nullable=False, index=True)
-    tokens_json = Column(Text, nullable=False)
+    tokens_json = Column(Text, nullable=True, default="{}")
+    access_token = Column(String(500), nullable=True)
+    refresh_token = Column(String(500), nullable=True)
+    scopes = Column(String(500), nullable=True)
+    expiry = Column(DateTime, nullable=True)
     updated_at = Column(
         DateTime,
         default=lambda: datetime.now(timezone.utc),
@@ -39,7 +43,7 @@ class UserGoogleToken(Base):
     user = relationship("User", backref="google_token_record")
 
     def __repr__(self):
-        return f"<UserGoogleToken(id={self.id}, user_id={self.user_id})>"
+        return f"<UserGoogleToken(id={self.id}, user_id={self.user_id}, access_token={'yes' if self.access_token else 'no'})>"
 
 
 class UploadType(str, enum.Enum):

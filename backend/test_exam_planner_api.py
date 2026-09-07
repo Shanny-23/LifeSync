@@ -159,5 +159,9 @@ def run_exam_planner_tests():
     print("\n ALL EXAM STUDY PLANNER TESTS COMPLETED SUCCESSFULLY!")
 
 
+def test_exam_planner():
+    run_exam_planner_tests()
+
+
 if __name__ == "__main__":
     run_exam_planner_tests()

@@ -28,7 +28,18 @@ export default function Layout() {
     return (
       <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
         <header className="landing-navbar">
-          <Link to="/landing" style={{ textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <Link to="/landing" style={{ textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <img
+              src="/logo.png"
+              alt="LifeSync Logo"
+              style={{
+                width: '34px',
+                height: '34px',
+                borderRadius: '8px',
+                objectFit: 'cover',
+                boxShadow: '0 2px 8px rgba(20, 56, 42, 0.15)'
+              }}
+            />
             <span style={{ fontSize: '1.4rem', fontWeight: 800, color: '#14382A' }}>LifeSync</span>
             <span className="pill-eyebrow forest">v1.0</span>
           </Link>
@@ -39,20 +50,20 @@ export default function Layout() {
               </Link>
             ) : (
               <>
-                <button
-                  onClick={openAuthModal}
+                <Link
+                  to="/login"
                   className="btn btn-secondary btn-sm"
-                  style={{ cursor: 'pointer' }}
+                  style={{ textDecoration: 'none', cursor: 'pointer', display: 'inline-flex', alignItems: 'center' }}
                 >
                   Sign In
-                </button>
-                <button
-                  onClick={loginWithGoogle}
+                </Link>
+                <Link
+                  to="/login"
                   className="btn btn-primary btn-sm"
-                  style={{ background: '#14382A', cursor: 'pointer' }}
+                  style={{ background: '#14382A', textDecoration: 'none', cursor: 'pointer', display: 'inline-flex', alignItems: 'center' }}
                 >
-                  Get App
-                </button>
+                  Get Started →
+                </Link>
               </>
             )}
           </div>

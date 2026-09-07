@@ -1,6 +1,7 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import Layout from './components/Layout';
 import Landing from './pages/Landing';
+import Login from './pages/Login';
 import Home from './pages/Home';
 import Dashboard from './pages/Dashboard';
 import Calendar from './pages/Calendar';
@@ -9,6 +10,7 @@ import Upload from './pages/Upload';
 import StreakDeepDive from './pages/StreakDeepDive';
 import { ToastProvider } from './context/ToastContext';
 import { AuthProvider, useAuth } from './context/AuthContext';
+import { WorkspaceProvider } from './context/WorkspaceContext';
 import AuthModal from './components/AuthModal';
 import AICopilotDrawer from './components/AICopilotDrawer';
 import './App.css';
@@ -37,6 +39,11 @@ function ProtectedRoute({ children }) {
 function AppRoutes() {
   return (
     <Routes>
+      {/* Public Authentication routes */}
+      <Route path="/login" element={<Login />} />
+      <Route path="/signin" element={<Login />} />
+      <Route path="/auth" element={<Login />} />
+
       {/* Public Landing route */}
       <Route element={<Layout />}>
         <Route path="/landing" element={<Landing />} />
@@ -67,11 +74,13 @@ function App() {
   return (
     <ToastProvider>
       <AuthProvider>
-        <BrowserRouter>
-          <AuthModal />
-          <AICopilotDrawer />
-          <AppRoutes />
-        </BrowserRouter>
+        <WorkspaceProvider>
+          <BrowserRouter>
+            <AuthModal />
+            <AICopilotDrawer />
+            <AppRoutes />
+          </BrowserRouter>
+        </WorkspaceProvider>
       </AuthProvider>
     </ToastProvider>
   );

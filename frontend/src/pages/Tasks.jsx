@@ -5,10 +5,12 @@ import RightRail from '../components/RightRail';
 import TaskDetailModal from '../components/TaskDetailModal';
 import NewTaskModal from '../components/NewTaskModal';
 import { useToast } from '../context/ToastContext';
+import gsap, { Flip, prefersReducedMotion } from '../lib/gsap';
 
 export default function Tasks() {
   const [searchParams, setSearchParams] = useSearchParams();
   const toast = useToast();
+  const taskCardsRef = useRef(null);
 
   const initialUrgency = searchParams.get('urgency') || 'all';
   const [tasks, setTasks] = useState([]);
@@ -88,6 +90,25 @@ export default function Tasks() {
     window.addEventListener('lifesync:task-created', handleTaskCreated);
     return () => window.removeEventListener('lifesync:task-created', handleTaskCreated);
   }, [fetchFilteredTasks]);
+
+  // Animate incoming cards smoothly when filter, category, or search changes
+  useEffect(() => {
+    if (loading || prefersReducedMotion() || !taskCardsRef.current) return;
+    const ctx = gsap.context(() => {
+      gsap.fromTo(
+        '.metric-card',
+        { opacity: 0, y: 12 },
+        {
+          opacity: 1,
+          y: 0,
+          duration: 0.28,
+          stagger: 0.04,
+          ease: 'power2.out',
+        }
+      );
+    }, taskCardsRef);
+    return () => ctx.revert();
+  }, [tasks.length, urgencyFilter, categoryFilter, debouncedSearch]);
 
   const handleUrgencyChange = (urg) => {
     setUrgencyFilter(urg);
@@ -237,7 +258,7 @@ export default function Tasks() {
         </div>
 
         {/* Tasks List */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+        <div ref={taskCardsRef} style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
           {loading ? (
             <div style={{ padding: '36px', textAlign: 'center', color: '#6B7280', fontSize: '0.9rem' }}>
               ⏳ Loading tasks from backend...

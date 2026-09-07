@@ -53,7 +53,10 @@ DEFAULT_COURSES = [
 ]
 
 
-def seed_default_courses_if_needed(db: Session, user_id: Optional[int] = None):
+def seed_default_courses_if_needed(db: Session, user_id: Optional[int] = None, user_google_id: str = ""):
+    # Only seed sample courses for demo accounts or unauthenticated demo sessions, never for real users
+    if user_google_id and not user_google_id.startswith("demo_user"):
+        return
     query = db.query(models.Course)
     if user_id is not None:
         query = query.filter(models.Course.user_id == user_id)
@@ -74,7 +77,7 @@ def list_courses(
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user)
 ):
-    seed_default_courses_if_needed(db, user_id=current_user.id)
+    seed_default_courses_if_needed(db, user_id=current_user.id, user_google_id=current_user.google_id or "")
     courses = (
         db.query(models.Course)
         .filter(models.Course.user_id == current_user.id)
@@ -123,10 +126,15 @@ def create_course(
     return CourseResponse.model_validate(course)
 
 
+@router.patch(
+    "/{course_id}/syllabus",
+    response_model=CourseResponse,
+    summary="Update syllabus covered percentage for a course via PATCH"
+)
 @router.put(
     "/{course_id}/syllabus",
     response_model=CourseResponse,
-    summary="Update syllabus covered percentage for a course"
+    summary="Update syllabus covered percentage for a course via PUT"
 )
 def update_syllabus(
     course_id: int,

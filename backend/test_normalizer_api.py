@@ -241,5 +241,9 @@ def run_normalizer_tests():
     print("\n ALL NORMALIZATION TESTS PASSED SUCCESSFULLY!")
 
 
+def test_normalizer():
+    run_normalizer_tests()
+
+
 if __name__ == "__main__":
     run_normalizer_tests()

@@ -4,19 +4,15 @@ import NewTaskModal from './NewTaskModal';
 import UserProfileModal from './UserProfileModal';
 import { useToast } from '../context/ToastContext';
 import { useAuth } from '../context/AuthContext';
-
-const WORKSPACES = [
-  { id: 'academic', name: 'Workspace 01 • Academic', icon: '🎓' },
-  { id: 'club', name: 'Workspace 02 • Clubs & Events', icon: '👥' },
-];
+import { useWorkspace, WORKSPACES } from '../context/WorkspaceContext';
 
 export default function Sidebar({ pendingTasksCount = 3 }) {
   const toast = useToast();
   const { user, openAuthModal, logout } = useAuth();
+  const { activeWorkspace, switchWorkspace } = useWorkspace();
   const [isTaskModalOpen, setIsTaskModalOpen] = useState(false);
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
   const [isWorkspaceMenuOpen, setIsWorkspaceMenuOpen] = useState(false);
-  const [activeWorkspace, setActiveWorkspace] = useState(WORKSPACES[0]);
 
   const workspaceRef = useRef(null);
 
@@ -31,7 +27,7 @@ export default function Sidebar({ pendingTasksCount = 3 }) {
   }, []);
 
   const handleSelectWorkspace = (ws) => {
-    setActiveWorkspace(ws);
+    switchWorkspace(ws);
     setIsWorkspaceMenuOpen(false);
     toast.info(`Switched to ${ws.name}`);
   };
@@ -42,6 +38,18 @@ export default function Sidebar({ pendingTasksCount = 3 }) {
         <div>
           <div className="sidebar-header">
             <NavLink to="/home" className="sidebar-brand">
+              <img
+                src="/logo.png"
+                alt="LifeSync Logo"
+                style={{
+                  width: '32px',
+                  height: '32px',
+                  borderRadius: '8px',
+                  objectFit: 'cover',
+                  boxShadow: '0 2px 6px rgba(0, 0, 0, 0.25)',
+                  flexShrink: 0
+                }}
+              />
               <span>LifeSync</span>
               <span className="sidebar-brand-badge">PRO</span>
             </NavLink>

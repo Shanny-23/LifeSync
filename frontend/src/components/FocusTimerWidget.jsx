@@ -1,5 +1,7 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { useToast } from '../context/ToastContext';
+import { completeFocusSession, getFocusStats } from '../api/client';
+import { animateTap } from '../lib/gsap';
 
 const MODES = {
   POMODORO: { label: '25m Focus', duration: 25 * 60 },
@@ -12,11 +14,49 @@ export default function FocusTimerWidget({ activeTask, onSessionComplete }) {
   const [modeKey, setModeKey] = useState('POMODORO');
   const [timeLeft, setTimeLeft] = useState(MODES.POMODORO.duration);
   const [isRunning, setIsRunning] = useState(false);
-  const [completedSessions, setCompletedSessions] = useState(3);
+  const [completedSessions, setCompletedSessions] = useState(0);
   const timerRef = useRef(null);
+
+  const fetchSessionStats = useCallback(async () => {
+    try {
+      const stats = await getFocusStats();
+      if (stats && typeof stats.today_sessions_count === 'number') {
+        setCompletedSessions(stats.today_sessions_count);
+      }
+    } catch {
+      // Graceful fallback
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchSessionStats();
+    const handleFocusSync = () => fetchSessionStats();
+    window.addEventListener('lifesync:focus-completed', handleFocusSync);
+    return () => window.removeEventListener('lifesync:focus-completed', handleFocusSync);
+  }, [fetchSessionStats]);
 
   const totalDuration = MODES[modeKey].duration;
   const progressPercent = Math.min(100, Math.max(0, ((totalDuration - timeLeft) / totalDuration) * 100));
+
+  const finishSession = async (spentDuration) => {
+    playChime();
+    const target = activeTask ? (activeTask.task || activeTask.title) : 'Focus Session';
+    try {
+      await completeFocusSession({
+        mode: modeKey,
+        duration_seconds: spentDuration || (totalDuration - timeLeft) || totalDuration,
+        target_name: target,
+        task_id: activeTask?.id || null,
+      });
+      setCompletedSessions((c) => c + 1);
+      toast.success(`🎉 Focus session complete! Target: "${target}" saved.`);
+      window.dispatchEvent(new CustomEvent('lifesync:focus-completed'));
+      if (onSessionComplete) onSessionComplete(modeKey);
+    } catch (err) {
+      console.error('Failed to persist focus session:', err);
+      toast.error('Session finished, but failed to save to server.');
+    }
+  };
 
   useEffect(() => {
     if (isRunning) {
@@ -25,10 +65,7 @@ export default function FocusTimerWidget({ activeTask, onSessionComplete }) {
           if (prev <= 1) {
             clearInterval(timerRef.current);
             setIsRunning(false);
-            playChime();
-            setCompletedSessions((c) => c + 1);
-            toast.success(`🎉 Focus session complete! Take a breather.`);
-            if (onSessionComplete) onSessionComplete(modeKey);
+            finishSession(totalDuration);
             return 0;
           }
           return prev - 1;
@@ -40,7 +77,7 @@ export default function FocusTimerWidget({ activeTask, onSessionComplete }) {
     return () => {
       if (timerRef.current) clearInterval(timerRef.current);
     };
-  }, [isRunning, modeKey]);
+  }, [isRunning, modeKey, totalDuration, activeTask]);
 
   const playChime = () => {
     try {
@@ -135,20 +172,54 @@ export default function FocusTimerWidget({ activeTask, onSessionComplete }) {
       </div>
 
       {/* Timer Controls */}
-      <div className="focus-controls">
+      <div className="focus-controls" style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
         <button
           type="button"
           className={`btn ${isRunning ? 'btn-secondary' : 'btn-primary'} btn-sm`}
-          style={{ flex: 2 }}
-          onClick={toggleTimer}
+          style={{ flex: '2 1 120px' }}
+          onClick={(e) => {
+            animateTap(e.currentTarget);
+            toggleTimer();
+          }}
         >
           {isRunning ? '⏸ Pause' : timeLeft === 0 ? '🔄 Restart' : '▶ Start Focus'}
         </button>
         <button
           type="button"
           className="btn btn-secondary btn-sm"
-          style={{ flex: 1 }}
-          onClick={handleReset}
+          style={{ flex: '1 1 50px' }}
+          onClick={(e) => {
+            animateTap(e.currentTarget);
+            setTimeLeft((prev) => prev + 300);
+            toast.info('+5 minutes added to timer');
+          }}
+          title="Add 5 minutes to focus timer"
+        >
+          +5m
+        </button>
+        <button
+          type="button"
+          className="btn btn-secondary btn-sm"
+          style={{ flex: '1 1 50px' }}
+          onClick={(e) => {
+            animateTap(e.currentTarget);
+            const spent = totalDuration - timeLeft;
+            setIsRunning(false);
+            finishSession(spent > 10 ? spent : 300);
+            setTimeLeft(MODES[modeKey].duration);
+          }}
+          title="Mark this focus session complete and log XP"
+        >
+          ✓ Done
+        </button>
+        <button
+          type="button"
+          className="btn btn-secondary btn-sm"
+          style={{ flex: '1 1 50px' }}
+          onClick={(e) => {
+            animateTap(e.currentTarget);
+            handleReset();
+          }}
         >
           Reset
         </button>

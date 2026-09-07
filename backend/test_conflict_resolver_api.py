@@ -207,5 +207,9 @@ def run_conflict_resolver_tests():
     print("\n ALL CONFLICT RESOLVER TESTS PASSED SUCCESSFULLY!")
 
 
+def test_conflict_resolver():
+    run_conflict_resolver_tests()
+
+
 if __name__ == "__main__":
     run_conflict_resolver_tests()

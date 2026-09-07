@@ -72,6 +72,30 @@ export function loginWithGoogle() {
   window.location.href = `${API_BASE_URL}/api/auth/google/login`;
 }
 
+export async function loginWithEmail(email, password = '') {
+  return request('/api/auth/login', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email, password }),
+  });
+}
+
+export async function registerUser({ email, name, password = '', major = 'Computer Science & AI' }) {
+  return request('/api/auth/register', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email, name, password, major }),
+  });
+}
+
+export async function loginWithDemoApi(persona = 'demo_user_1') {
+  return request('/api/auth/demo', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ persona }),
+  });
+}
+
 // -------------------------------------------------------------
 // Tasks API
 // -------------------------------------------------------------
@@ -221,6 +245,86 @@ export async function importGoogleCalendar({ commit = false, timeMin, timeMax } 
   return request(`/api/google/sync/import${queryString}`, { method: 'POST' });
 }
 
+// -------------------------------------------------------------
+// AI Document Analysis API
+// -------------------------------------------------------------
+export async function analyzeDocument({ text, uploadId, groqKey } = {}) {
+  return request('/api/ai/analyze-document', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      text: text || undefined,
+      upload_id: uploadId || undefined,
+      groq_key: groqKey || undefined,
+    }),
+  });
+}
+
+export async function commitExtractedItems({ assignments = [], exams = [], events = [] }) {
+  return request('/api/ai/commit-extracted', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ assignments, exams, events }),
+  });
+}
+
+// -------------------------------------------------------------
+// Focus Sessions API
+// -------------------------------------------------------------
+export async function getFocusStats() {
+  return request('/api/focus/stats');
+}
+
+export async function completeFocusSession({
+  mode = 'POMODORO',
+  duration_seconds = 1500,
+  target_name = null,
+  task_id = null
+} = {}) {
+  return request('/api/focus/complete', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      mode,
+      duration_seconds,
+      target_name,
+      task_id,
+      completed: true,
+    }),
+  });
+}
+
+// -------------------------------------------------------------
+// Courses & Syllabus Mastery API
+// -------------------------------------------------------------
+export async function getCourses() {
+  return request('/api/courses');
+}
+
+export async function createCourse(courseData) {
+  return request('/api/courses', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(courseData),
+  });
+}
+
+export async function updateCourseSyllabus(courseId, syllabusCoveredPct) {
+  return request(`/api/courses/${courseId}/syllabus`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ syllabus_covered_pct: syllabusCoveredPct }),
+  });
+}
+
+export async function planCourseExam(courseId) {
+  return request(`/api/courses/${courseId}/plan-exam`, { method: 'POST' });
+}
+
+export async function deleteCourse(courseId) {
+  return request(`/api/courses/${courseId}`, { method: 'DELETE' });
+}
+
 export default {
   API_BASE_URL,
   getHealth,
@@ -247,4 +351,13 @@ export default {
   getMe,
   logout,
   loginWithGoogle,
+  analyzeDocument,
+  commitExtractedItems,
+  getFocusStats,
+  completeFocusSession,
+  getCourses,
+  createCourse,
+  updateCourseSyllabus,
+  planCourseExam,
+  deleteCourse,
 };

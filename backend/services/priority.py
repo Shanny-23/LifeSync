@@ -161,7 +161,7 @@ def recalculate_all_priorities(
 
     query = db.query(models.Task).filter(models.Task.status != "completed")
     if user_id is not None:
-        query = query.filter(models.Task.user_id == user_id)
+        query = query.filter((models.Task.user_id == user_id) | (models.Task.user_id == None))
 
     tasks = query.all()
 

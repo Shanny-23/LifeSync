@@ -123,5 +123,9 @@ def run_tests():
 
         print("\n ALL TESTS PASSED SUCCESSFULLY!")
 
+def test_upload():
+    run_tests()
+
+
 if __name__ == "__main__":
     run_tests()

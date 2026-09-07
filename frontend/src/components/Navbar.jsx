@@ -27,8 +27,18 @@ export default function Navbar() {
   return (
     <header className="navbar">
       <div className="nav-container">
-        <NavLink to="/dashboard" className="nav-brand">
-          LifeSync
+        <NavLink to="/dashboard" className="nav-brand" style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+          <img
+            src="/logo.png"
+            alt="LifeSync Logo"
+            style={{
+              width: '28px',
+              height: '28px',
+              borderRadius: '6px',
+              objectFit: 'cover'
+            }}
+          />
+          <span>LifeSync</span>
         </NavLink>
 
         <nav className="nav-links">

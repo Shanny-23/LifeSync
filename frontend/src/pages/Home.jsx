@@ -8,13 +8,23 @@ import TaskDetailModal from '../components/TaskDetailModal';
 import NewTaskModal from '../components/NewTaskModal';
 import { getTasks } from '../api';
 import { useToast } from '../context/ToastContext';
+import { useAuth } from '../context/AuthContext';
+import { useWorkspace } from '../context/WorkspaceContext';
 
 export default function Home() {
   const navigate = useNavigate();
   const toast = useToast();
+  const { user } = useAuth();
+  const { filterByWorkspace } = useWorkspace();
   const [tasks, setTasks] = useState([]);
   const [isLiveBackend, setIsLiveBackend] = useState(false);
-  const [habitCompleted, setHabitCompleted] = useState(false);
+  const [habitCompleted, setHabitCompleted] = useState(() => {
+    try {
+      return localStorage.getItem('lifesync_habit_yoga') === 'true';
+    } catch {
+      return false;
+    }
+  });
   const [_loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
@@ -44,23 +54,30 @@ export default function Home() {
       loadData();
     };
     window.addEventListener('lifesync:task-created', handleTaskCreated);
+    window.addEventListener('lifesync:refresh', handleTaskCreated);
 
     return () => {
       window.removeEventListener('lifesync:task-created', handleTaskCreated);
+      window.removeEventListener('lifesync:refresh', handleTaskCreated);
     };
   }, []);
 
-  const urgentTasksCount = tasks.filter(
-    (t) => (t.priority_score || 0) >= 70 || t.urgency === 'high' || t.status === 'scheduled'
-  ).length || 3;
+  const scopedTasks = filterByWorkspace(tasks);
 
-  const topUrgentTask = [...tasks]
+  const urgentTasksCount = scopedTasks.filter(
+    (t) => (t.priority_score || 0) >= 70 || t.urgency === 'high' || t.status === 'scheduled'
+  ).length || scopedTasks.length;
+
+  const topUrgentTask = [...scopedTasks]
     .filter((t) => t.status !== 'completed' && !t.completed)
-    .sort((a, b) => (b.priority_score || 0) - (a.priority_score || 0))[0] || tasks[0];
+    .sort((a, b) => (b.priority_score || 0) - (a.priority_score || 0))[0] || scopedTasks[0];
 
   const handleToggleHabit = () => {
     const nextState = !habitCompleted;
     setHabitCompleted(nextState);
+    try {
+      localStorage.setItem('lifesync_habit_yoga', String(nextState));
+    } catch {}
     if (nextState) {
       toast.success('🧘 Morning Yoga & Breathwork marked complete! Streak active.');
     } else {
@@ -70,7 +87,7 @@ export default function Home() {
 
   const handleDateSelect = (day) => {
     setSelectedDateFilter(day);
-    toast.info(`Filtered schedule for ${day.name}, Oct ${day.num}`);
+    toast.info(`Showing schedule for ${day.name}, ${day.label}`);
   };
 
   return (
@@ -81,16 +98,16 @@ export default function Home() {
         <section className="greeting-banner">
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
             <span className="pill-eyebrow" style={{ background: 'rgba(255,255,255,0.2)', color: '#FFFFFF' }}>
-              DAILY WORKSPACE ACTIVE • SEPTEMBER 2026
+              DAILY WORKSPACE ACTIVE
             </span>
             <span style={{ fontSize: '0.74rem', color: isLiveBackend ? '#A7F3D0' : '#FCA5A5' }}>
               {isLiveBackend ? '● Live Backend API' : '● Backend Disconnected'}
             </span>
           </div>
 
-          <h1 className="greeting-title">Hello, Totok Michael 👋</h1>
+          <h1 className="greeting-title">Hello, {user?.name || 'LifeSync Scholar'} 👋</h1>
           <p className="greeting-subtitle">
-            Welcome back! Here is your daily focus: <strong>{urgentTasksCount} urgent tasks</strong>, <strong>1 team sync</strong>, and <strong>1 routine habit</strong> scheduled today.
+            Welcome back! Here is your daily focus: <strong>{urgentTasksCount} urgent tasks</strong>, <strong>1 study session</strong>, and <strong>1 routine habit</strong> scheduled today.
           </p>
 
           {/* Interactive Greeting Pills */}
@@ -171,7 +188,7 @@ export default function Home() {
 
         {/* 2. At a Glance Metrics Row */}
         <AtAGlanceMetrics
-          tasks={tasks}
+          tasks={scopedTasks}
           routinePercent={habitCompleted ? 57 : 41}
           activeTaskName={topUrgentTask ? (topUrgentTask.title || topUrgentTask.task) : "CS101 Term Paper Draft"}
         />

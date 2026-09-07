@@ -124,5 +124,9 @@ def run_parser_tests():
     print("\n ALL PARSER / OCR TESTS COMPLETED SUCCESSFULLY!")
 
 
+def test_parser():
+    run_parser_tests()
+
+
 if __name__ == "__main__":
     run_parser_tests()

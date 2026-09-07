@@ -1,7 +1,9 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useToast } from '../context/ToastContext';
 import StreakBreakdownModal from './StreakBreakdownModal';
+import { getFocusStats, completeFocusSession } from '../api/client';
+import gsap, { prefersReducedMotion } from '../lib/gsap';
 
 export default function AtAGlanceMetrics({
   tasks = [],
@@ -12,9 +14,41 @@ export default function AtAGlanceMetrics({
 }) {
   const navigate = useNavigate();
   const toast = useToast();
+  const streakRef = useRef(null);
   const [seconds, setSeconds] = useState(6138); // 01:42:18
   const [isRunning, setIsRunning] = useState(true);
+  const [isSubmittingFocus, setIsSubmittingFocus] = useState(false);
+  const [focusStats, setFocusStats] = useState(null);
   const [isStreakModalOpen, setIsStreakModalOpen] = useState(false);
+
+  const fetchStats = useCallback(async () => {
+    try {
+      const stats = await getFocusStats();
+      if (stats) setFocusStats(stats);
+    } catch {
+      // Fallback gracefully
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchStats();
+    const handleFocusCompleted = () => fetchStats();
+    window.addEventListener('lifesync:focus-completed', handleFocusCompleted);
+    return () => window.removeEventListener('lifesync:focus-completed', handleFocusCompleted);
+  }, [fetchStats]);
+
+  // Flash highlight on streak number when stats update
+  useEffect(() => {
+    if (!focusStats || !streakRef.current || prefersReducedMotion()) return;
+    const ctx = gsap.context(() => {
+      gsap.fromTo(
+        streakRef.current,
+        { scale: 1.3, color: '#10B981' },
+        { scale: 1, color: '#0F172A', duration: 0.45, ease: 'back.out(2)' }
+      );
+    }, streakRef);
+    return () => ctx.revert();
+  }, [focusStats]);
 
   useEffect(() => {
     let interval = null;
@@ -45,9 +79,24 @@ export default function AtAGlanceMetrics({
     (t.category || '').toLowerCase().includes('math')
   ).length || 5;
 
-  const handleCompleteSession = () => {
+  const handleCompleteSession = async () => {
     setIsRunning(false);
-    toast.success('🎉 Focus session completed! +50 Mindful Focus XP recorded.');
+    setIsSubmittingFocus(true);
+    try {
+      await completeFocusSession({
+        mode: 'POMODORO',
+        duration_seconds: seconds,
+        target_name: activeTaskName || 'General Focus',
+      });
+      toast.success('🎉 Focus session completed! +50 Mindful Focus XP recorded.');
+      window.dispatchEvent(new CustomEvent('lifesync:focus-completed'));
+      fetchStats();
+    } catch (err) {
+      console.error('Focus session save failed:', err);
+      toast.error('Could not save focus session to server.');
+    } finally {
+      setIsSubmittingFocus(false);
+    }
   };
 
   return (
@@ -121,11 +170,13 @@ export default function AtAGlanceMetrics({
             <span className="pill-eyebrow amber">Top 5%</span>
           </div>
           <div className="metric-content">
-            <span className="metric-number">{streakDays}</span>
+            <span className="metric-number" ref={streakRef}>{focusStats?.streak_days ?? streakDays}</span>
             <span className="metric-subtext">consecutive days</span>
           </div>
           <div style={{ fontSize: '0.70rem', color: '#6B7280' }}>
-            Logged: 2h 45m today
+            {focusStats?.today_focus_minutes != null
+              ? `Logged: ${Math.floor(focusStats.today_focus_minutes / 60)}h ${focusStats.today_focus_minutes % 60}m today`
+              : 'Logged: 2h 45m today'}
           </div>
           <div
             style={{ fontSize: '0.68rem', color: '#B45309', marginTop: '6px', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '4px' }}
@@ -180,8 +231,9 @@ export default function AtAGlanceMetrics({
                 type="button"
                 className="btn btn-primary btn-xs"
                 onClick={handleCompleteSession}
+                disabled={isSubmittingFocus}
               >
-                Complete
+                {isSubmittingFocus ? 'Saving...' : 'Complete'}
               </button>
             </div>
           )}

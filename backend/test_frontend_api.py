@@ -327,8 +327,74 @@ def test_events_endpoints():
     print(" GET /api/events/999999 correctly returned 404.")
 
 
+def test_focus_and_courses_and_google_sync_endpoints():
+    print("\n--- 4. Testing Focus, Courses, and Google Sync Endpoints ---")
+    
+    # 4a. Focus Stats
+    stats_resp = client.get("/api/focus/stats")
+    assert stats_resp.status_code == 200
+    stats = stats_resp.json()
+    assert "today_sessions_count" in stats
+    assert "streak_days" in stats
+
+    # 4b. Record Focus Session
+    record_resp = client.post("/api/focus/complete", json={
+        "mode": "POMODORO",
+        "duration_seconds": 1500,
+        "target_name": "CS101 Study Session"
+    })
+    assert record_resp.status_code == 201
+    rec_data = record_resp.json()
+    assert rec_data["completed"] is True
+    assert rec_data["id"] > 0
+
+    # 4c. Verify updated stats
+    stats_resp2 = client.get("/api/focus/stats")
+    assert stats_resp2.status_code == 200
+    stats2 = stats_resp2.json()
+    assert stats2["today_sessions_count"] >= 1
+    assert stats2["today_focus_minutes"] >= 25
+
+    # 4d. Courses List
+    courses_resp = client.get("/api/courses")
+    assert courses_resp.status_code == 200
+    courses = courses_resp.json()
+    assert len(courses) >= 3
+    cs_course = next(c for c in courses if c["code"] == "CS101")
+    assert cs_course["credits"] == 4
+
+    # 4e. Plan Course Exam Study Blocks
+    plan_resp = client.post(f"/api/courses/{cs_course['id']}/plan-exam")
+    assert plan_resp.status_code == 200
+    plan_data = plan_resp.json()
+    assert "sessions_created" in plan_data
+    assert "study_sessions" in plan_data
+
+    # 4f. Google Calendar Sync & Import
+    db_sync = SessionLocal()
+    demo_u = db_sync.query(models.User).filter(models.User.google_id == "demo_user_1").first()
+    target_uid = demo_u.id if demo_u else 1
+    tok = db_sync.query(models.UserGoogleToken).filter_by(user_id=target_uid).first()
+    if not tok:
+        tok = models.UserGoogleToken(user_id=target_uid, access_token="mock_access_token_123")
+        db_sync.add(tok)
+        db_sync.commit()
+    elif not tok.access_token:
+        tok.access_token = "mock_access_token_123"
+        db_sync.commit()
+    db_sync.close()
+
+    google_import_resp = client.post("/api/google/sync/import?commit=true")
+    assert google_import_resp.status_code == 200
+    g_res = google_import_resp.json()
+    assert g_res.get("success") is True
+    assert g_res.get("importedCount", 0) >= 1
+    print(" Focus, Courses, and Google Sync Endpoints verified successfully.")
+
+
 if __name__ == "__main__":
     test_schedule_endpoints()
     test_tasks_endpoints()
     test_events_endpoints()
+    test_focus_and_courses_and_google_sync_endpoints()
     print("\n ALL FRONTEND REST API TESTS PASSED SUCCESSFULLY! ")

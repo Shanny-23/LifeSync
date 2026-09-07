@@ -155,5 +155,9 @@ def run_priority_tests():
     print("\n ALL PRIORITY CALCULATOR TESTS COMPLETED SUCCESSFULLY!")
 
 
+def test_priority():
+    run_priority_tests()
+
+
 if __name__ == "__main__":
     run_priority_tests()

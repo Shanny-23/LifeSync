@@ -12,7 +12,7 @@ export default function Landing() {
     if (user) {
       navigate('/dashboard');
     } else {
-      loginWithGoogle();
+      navigate('/login');
     }
   };
 
@@ -20,6 +20,11 @@ export default function Landing() {
     <div style={{ background: '#F8FAFC' }}>
       {/* 1. Hero Section matching Figma Screen 4 */}
       <section className="landing-hero" style={{ padding: '48px 24px 32px 24px', textAlign: 'center' }}>
+        <div style={{ display: 'inline-flex', alignItems: 'center', gap: '10px', background: '#FFFFFF', padding: '6px 18px 6px 8px', borderRadius: '30px', boxShadow: '0 4px 16px rgba(20, 56, 42, 0.08)', border: '1px solid rgba(16, 185, 129, 0.25)', marginBottom: '18px' }}>
+          <img src="/logo.png" alt="LifeSync Logo" style={{ width: '28px', height: '28px', borderRadius: '50%', objectFit: 'cover' }} />
+          <span style={{ fontSize: '0.86rem', fontWeight: 700, color: '#14382A', letterSpacing: '-0.01em' }}>LifeSync — Elevate your flow</span>
+        </div>
+
         <div className="hero-social-proof" style={{ marginBottom: '16px' }}>
           <span>★★★★★</span>
           <span>4.9/5 Rating • Built for Top Universities & Students</span>

@@ -222,7 +222,10 @@ def get_slot_by_id(
     row = (
         db.query(models.ScheduledSlot, models.Task)
         .outerjoin(models.Task, models.ScheduledSlot.task_id == models.Task.id)
-        .filter(models.ScheduledSlot.id == slot_id, models.ScheduledSlot.user_id == current_user.id)
+        .filter(
+            models.ScheduledSlot.id == slot_id,
+            (models.ScheduledSlot.user_id == current_user.id) | (models.ScheduledSlot.user_id == None)
+        )
         .first()
     )
     if not row:

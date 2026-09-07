@@ -102,7 +102,9 @@ def get_tasks(
     Returns tasks for the authenticated user with priority_score, status, and linked scheduled_slots.
     Supports filtering by category, status, urgency, and search keywords.
     """
-    query = db.query(models.Task).filter(models.Task.user_id == current_user.id)
+    query = db.query(models.Task).filter(
+        (models.Task.user_id == current_user.id) | (models.Task.user_id == None)
+    )
 
     if status_filter and status_filter.lower() != "all":
         query = query.filter(models.Task.status == status_filter)
@@ -168,7 +170,7 @@ def get_task_by_id(
     """Retrieve a single task by ID with linked slots for the authenticated user."""
     task = db.query(models.Task).filter(
         models.Task.id == task_id,
-        models.Task.user_id == current_user.id
+        (models.Task.user_id == current_user.id) | (models.Task.user_id == None)
     ).first()
     if not task:
         raise HTTPException(

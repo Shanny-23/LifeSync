@@ -73,4 +73,15 @@ def ensure_db_schema():
         add_column_if_missing("courses", "user_id", "INTEGER REFERENCES users(id)")
         add_column_if_missing("focus_sessions", "user_id", "INTEGER REFERENCES users(id)")
 
+        add_column_if_missing("user_google_tokens", "access_token", "VARCHAR(500)")
+        add_column_if_missing("user_google_tokens", "refresh_token", "VARCHAR(500)")
+        add_column_if_missing("user_google_tokens", "scopes", "VARCHAR(500)")
+        add_column_if_missing("user_google_tokens", "expiry", "DATETIME")
+
+
+try:
+    ensure_db_schema()
+except Exception as _e:
+    pass
+
 

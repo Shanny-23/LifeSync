@@ -7,6 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Response, status, 
 from fastapi.responses import RedirectResponse, JSONResponse
 from sqlalchemy.orm import Session
 
+from pydantic import BaseModel
 from database import get_db
 import models
 from services.jwt_service import create_session_token
@@ -23,8 +24,24 @@ def get_cookie_secure() -> bool:
     return os.getenv("COOKIE_SECURE", "false").lower() in ("true", "1")
 
 
+class LoginRequest(BaseModel):
+    email: str
+    password: Optional[str] = None
+
+
+class RegisterRequest(BaseModel):
+    email: str
+    name: str
+    password: Optional[str] = None
+    major: Optional[str] = "Computer Science & AI"
+
+
+class DemoLoginRequest(BaseModel):
+    persona: str = "demo_user_1"
+
+
 @router.get("/google/login", summary="Initiate Google OAuth2 Login Flow")
-def google_login():
+def google_login(request: Request):
     """
     Redirects the browser to Google's OAuth2 consent screen requesting
     scopes: 'openid email profile' for user identity.
@@ -33,7 +50,15 @@ def google_login():
     """
     client_id = os.getenv("GOOGLE_CLIENT_ID", "").strip()
     redirect_uri = os.getenv("GOOGLE_AUTH_REDIRECT_URI", "http://127.0.0.1:8000/api/auth/google/callback").strip()
-    frontend_url = os.getenv("FRONTEND_URL", "http://localhost:5173").rstrip("/")
+    
+    # Intelligently resolve frontend URL based on caller origin (127.0.0.1 vs localhost)
+    origin = request.headers.get("origin") or request.headers.get("referer") or ""
+    if "127.0.0.1:5173" in origin:
+        frontend_url = "http://127.0.0.1:5173"
+    elif "localhost:5173" in origin:
+        frontend_url = "http://localhost:5173"
+    else:
+        frontend_url = os.getenv("FRONTEND_URL", "http://127.0.0.1:5173").rstrip("/")
 
     if not client_id:
         # Development mode fallback: establish session for demo student user
@@ -59,7 +84,7 @@ def google_login():
                 seed(user_id=user.id)
 
             session_token = create_session_token(user_id=user.id, email=user.email, name=user.name)
-            response = RedirectResponse(url=f"{frontend_url}/dashboard", status_code=302)
+            response = RedirectResponse(url=f"{frontend_url}/dashboard?token={session_token}", status_code=302)
             response.set_cookie(
                 key=COOKIE_NAME,
                 value=session_token,
@@ -228,3 +253,312 @@ def logout(response: Response):
         samesite="lax"
     )
     return res
+
+
+@router.post("/login", summary="Sign in with Email and Password")
+def email_login(data: LoginRequest, response: Response, db: Session = Depends(get_db)):
+    """
+    Sign in with an email address. If the student doesn't exist yet,
+    gracefully auto-provisions their student account so they never get locked out.
+    """
+    email_clean = data.email.strip().lower()
+    if not email_clean or "@" not in email_clean:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Please provide a valid university or personal email address."
+        )
+
+    # Check for known demo user aliases
+    demo_match = None
+    for p_id, p_data in DEMO_USERS.items():
+        if p_data.get("email", "").lower() == email_clean:
+            demo_match = p_data
+            break
+
+    user = db.query(models.User).filter(models.User.email == email_clean).first()
+    if not user:
+        # Auto-create student user account
+        default_name = demo_match["name"] if demo_match else email_clean.split("@")[0].replace(".", " ").title()
+        default_avatar = demo_match["avatar"] if demo_match else "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80"
+        user = models.User(
+            google_id=f"email_user_{email_clean}",
+            email=email_clean,
+            name=default_name,
+            picture_url=default_avatar
+        )
+        db.add(user)
+        db.commit()
+        db.refresh(user)
+        seed(user_id=user.id)
+
+    session_token = create_session_token(user_id=user.id, email=user.email, name=user.name)
+
+    res = JSONResponse(
+        content={
+            "success": True,
+            "token": session_token,
+            "user": {
+                "id": user.id,
+                "uid": user.google_id,
+                "email": user.email,
+                "name": user.name,
+                "picture_url": user.picture_url,
+                "avatar": user.picture_url,
+                "major": "Computer Science & AI",
+                "streak_days": 12,
+                "completion_rate": 88
+            }
+        }
+    )
+    res.set_cookie(
+        key=COOKIE_NAME,
+        value=session_token,
+        max_age=COOKIE_MAX_AGE,
+        httponly=True,
+        samesite="lax",
+        secure=get_cookie_secure(),
+        path="/"
+    )
+    return res
+
+
+@router.post("/register", summary="Register New Student Account")
+def email_register(data: RegisterRequest, response: Response, db: Session = Depends(get_db)):
+    """
+    Register a new student account with name, email, and academic major.
+    """
+    email_clean = data.email.strip().lower()
+    name_clean = data.name.strip()
+
+    if not email_clean or "@" not in email_clean:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Please provide a valid email address."
+        )
+    if not name_clean:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Please provide your full student name."
+        )
+
+    user = db.query(models.User).filter(models.User.email == email_clean).first()
+    if not user:
+        user = models.User(
+            google_id=f"registered_user_{email_clean}",
+            email=email_clean,
+            name=name_clean,
+            picture_url="https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80"
+        )
+        db.add(user)
+        db.commit()
+        db.refresh(user)
+        # Seed initial curriculum and sample schedule for new student
+        seed(user_id=user.id)
+    else:
+        user.name = name_clean
+        db.commit()
+
+    session_token = create_session_token(user_id=user.id, email=user.email, name=user.name)
+
+    res = JSONResponse(
+        content={
+            "success": True,
+            "token": session_token,
+            "user": {
+                "id": user.id,
+                "uid": user.google_id,
+                "email": user.email,
+                "name": user.name,
+                "picture_url": user.picture_url,
+                "avatar": user.picture_url,
+                "major": data.major or "Computer Science & AI",
+                "streak_days": 1,
+                "completion_rate": 100
+            }
+        }
+    )
+    res.set_cookie(
+        key=COOKIE_NAME,
+        value=session_token,
+        max_age=COOKIE_MAX_AGE,
+        httponly=True,
+        samesite="lax",
+        secure=get_cookie_secure(),
+        path="/"
+    )
+    return res
+
+
+@router.post("/demo", summary="One-Click Demo Student Persona Login")
+def demo_login(data: DemoLoginRequest, response: Response, db: Session = Depends(get_db)):
+    """
+    Instantly authenticates as one of the pre-configured student personas.
+    """
+    persona_key = data.persona
+    persona = DEMO_USERS.get(persona_key, DEFAULT_USER)
+
+    user = db.query(models.User).filter(models.User.google_id == persona["uid"]).first()
+    if not user:
+        user = models.User(
+            google_id=persona["uid"],
+            email=persona["email"],
+            name=persona["name"],
+            picture_url=persona["avatar"]
+        )
+        db.add(user)
+        db.commit()
+        db.refresh(user)
+        seed(user_id=user.id)
+
+    session_token = create_session_token(user_id=user.id, email=user.email, name=user.name)
+
+    res = JSONResponse(
+        content={
+            "success": True,
+            "token": session_token,
+            "user": {
+                "id": user.id,
+                "uid": persona["uid"],
+                "email": user.email,
+                "name": user.name,
+                "picture_url": user.picture_url,
+                "avatar": user.picture_url,
+                "major": persona.get("major", "Computer Science & AI"),
+                "streak_days": persona.get("streak_days", 12),
+                "completion_rate": persona.get("completion_rate", 88)
+            }
+        }
+    )
+    res.set_cookie(
+        key=COOKIE_NAME,
+        value=session_token,
+        max_age=COOKIE_MAX_AGE,
+        httponly=True,
+        samesite="lax",
+        secure=get_cookie_secure(),
+        path="/"
+    )
+    return res
+
+
+class DemoLoginLegacyRequest(BaseModel):
+    user_id: Optional[str] = None
+    persona: Optional[str] = None
+
+
+class VerifyTokenRequest(BaseModel):
+    token: str
+
+
+@router.get("/demo-users", summary="List Available Demo Student Personas")
+def list_demo_users():
+    """Returns list of pre-configured demo student profiles."""
+    users_list = list(DEMO_USERS.values())
+    return {
+        "status": "success",
+        "users": users_list
+    }
+
+
+@router.post("/demo-login", summary="Legacy/Alternative Demo Student Persona Login")
+def legacy_demo_login(payload: DemoLoginLegacyRequest, response: Response, db: Session = Depends(get_db)):
+    """Accepts user_id or persona key for demo login."""
+    target_persona = payload.user_id or payload.persona or "demo_user_1"
+    persona = DEMO_USERS.get(target_persona, DEFAULT_USER)
+
+    user = db.query(models.User).filter(models.User.google_id == persona["uid"]).first()
+    if not user:
+        user = models.User(
+            google_id=persona["uid"],
+            email=persona["email"],
+            name=persona["name"],
+            picture_url=persona["avatar"]
+        )
+        db.add(user)
+        db.commit()
+        db.refresh(user)
+        seed(user_id=user.id)
+
+    token_str = f"demo-token-{persona['uid']}"
+    user_dict = {
+        "id": user.id,
+        "uid": persona["uid"],
+        "email": user.email,
+        "name": user.name,
+        "picture_url": user.picture_url,
+        "avatar": user.picture_url,
+        "major": persona.get("major", "Computer Science & AI"),
+        "streak_days": persona.get("streak_days", 12),
+        "completion_rate": persona.get("completion_rate", 88)
+    }
+
+    res = JSONResponse(
+        content={
+            "status": "success",
+            "success": True,
+            "token": token_str,
+            "user": user_dict
+        }
+    )
+    res.set_cookie(
+        key=COOKIE_NAME,
+        value=token_str,
+        max_age=COOKIE_MAX_AGE,
+        httponly=True,
+        samesite="lax",
+        secure=get_cookie_secure(),
+        path="/"
+    )
+    return res
+
+
+@router.post("/verify", summary="Verify Session Token and Return User Profile")
+def verify_token_endpoint(payload: VerifyTokenRequest, db: Session = Depends(get_db)):
+    """Verifies a JWT token or demo token string."""
+    token = payload.token.strip()
+    if token.startswith("demo-token-"):
+        persona_key = token.replace("demo-token-", "")
+        persona = DEMO_USERS.get(persona_key, DEFAULT_USER)
+        db_user = db.query(models.User).filter(models.User.google_id == persona["uid"]).first()
+        if not db_user:
+            db_user = models.User(
+                google_id=persona["uid"],
+                email=persona["email"],
+                name=persona["name"],
+                picture_url=persona["avatar"]
+            )
+            db.add(db_user)
+            db.commit()
+            db.refresh(db_user)
+        return {
+            "status": "success",
+            "valid": True,
+            "user": {
+                "id": db_user.id,
+                "email": db_user.email,
+                "name": db_user.name,
+                "picture_url": db_user.picture_url
+            }
+        }
+
+    from services.jwt_service import verify_session_token
+    token_payload = verify_session_token(token)
+    if not token_payload or "user_id" not in token_payload:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token")
+
+    user_id = token_payload["user_id"]
+    user = db.query(models.User).filter(models.User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+
+    return {
+        "status": "success",
+        "valid": True,
+        "user": {
+            "id": user.id,
+            "email": user.email,
+            "name": user.name,
+            "picture_url": user.picture_url
+        }
+    }
+

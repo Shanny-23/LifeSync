@@ -14,8 +14,8 @@ from services.gemini_extractor import (
 
 def test_models_split():
     print("1. Checking Groq model assignments...")
-    assert EXTRACTION_MODEL == "llama-3.3-70b-versatile"
-    assert REASONING_MODEL == "deepseek-r1-distill-llama-70b"
+    assert EXTRACTION_MODEL == "openai/gpt-oss-120b"
+    assert REASONING_MODEL == "openai/gpt-oss-120b"
     print("   [PASS] EXTRACTION_MODEL:", EXTRACTION_MODEL)
     print("   [PASS] REASONING_MODEL:", REASONING_MODEL)
 
@@ -76,8 +76,7 @@ def test_api_status_and_preview():
     status_res = client.get("/api/ai/status", cookies=cookies)
     assert status_res.status_code == 200
     status_data = status_res.json()
-    assert "llama-3.3-70b-versatile" in status_data["model"]
-    assert "deepseek-r1-distill-llama-70b" in status_data["model"]
+    assert "openai/gpt-oss-120b" in status_data["model"]
     print("   [PASS] /api/ai/status reports Groq models:", status_data["model"], "| mode:", status_data["mode"])
 
     # POST /api/ai/extract-preview

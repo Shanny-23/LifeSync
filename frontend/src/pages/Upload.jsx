@@ -22,6 +22,48 @@ const UPLOAD_TYPES = [
   { id: 'club_calendar', label: 'Club Calendar', description: 'Extracts extracurricular meetings and club commitments' },
 ];
 
+const SAMPLE_DOCUMENTS = {
+  cs450: `CS450: Distributed Operating Systems (Fall 2026)
+Instructor: Prof. Sarah Jenkins
+Lectures: Monday and Wednesday 10:00 - 11:30 AM (Auditorium Hall B)
+Lab Sessions: Friday 14:00 - 16:00 (Systems Lab 204)
+
+Grading Distribution:
+- Programming Labs (4 Major Labs): 30%
+- Midterm Examination: 30%
+- Final Distributed Project & Demos: 40%
+
+Key Deadlines & Milestones:
+- Lab 1: Multithreaded RPC Framework due Sep 28, 2026 at 23:59
+- Lab 2: Raft Consensus State Machine due Oct 18, 2026 at 23:59
+- Midterm Exam on Oct 21, 2026 at 10:00 AM
+- Final Project Submission & Code Review due Dec 02, 2026 at 23:59`,
+
+  math201: `MATH201: Advanced Linear Algebra & Matrix Applications
+Instructor: Dr. Alan Turing
+Lectures: Tuesday and Thursday 09:00 - 10:30 AM (Science Hall 301)
+
+Assessment Weights:
+- Weekly Problem Sets: 25%
+- Midterm Exam: 35%
+- Comprehensive Final Assessment: 40%
+
+Schedule:
+- Problem Set 1: Vector Subspaces due Oct 05, 2026 at 17:00
+- Midterm Exam on Oct 29, 2026 at 09:00 AM
+- Problem Set 2: SVD and Principal Components due Nov 19, 2026 at 17:00
+- Comprehensive Final on Dec 10, 2026 at 09:00 AM`,
+
+  fest: `TechFest 2026 Campus Circular & Schedule
+Venue: Campus Innovation Center & Main Grounds
+Dates: Oct 24, 2026 to Oct 26, 2026
+
+Schedule of Events:
+- 24-Hour AI Hackathon Kickoff on Oct 24, 2026 at 10:00 AM
+- Robotics Arena Finals on Oct 25, 2026 at 14:00
+- Project Expo & Keynote on Oct 26, 2026 at 16:00 in Main Auditorium`
+};
+
 export default function Upload() {
   const [dragOver, setDragOver] = useState(false);
   const [uploadedFile, setUploadedFile] = useState(null);
@@ -35,6 +77,9 @@ export default function Upload() {
   const [summaryData, setSummaryData] = useState({ taskCount: 0, eventCount: 0 });
   const [isReviewOpen, setIsReviewOpen] = useState(false);
   const [currentUploadId, setCurrentUploadId] = useState(null);
+  const [inputMode, setInputMode] = useState('file'); // 'file' | 'text'
+  const [pasteText, setPasteText] = useState(SAMPLE_DOCUMENTS.cs450);
+  const [reviewRawText, setReviewRawText] = useState('');
 
   // Google Calendar Integration State
   const [googleConnected, setGoogleConnected] = useState(false);
@@ -379,164 +424,336 @@ export default function Upload() {
         </div>
 
         {/* =========================================================================
-            SECTION 2: DOCUMENT & FILE UPLOAD PIPELINE
+            SECTION 2: DOCUMENT INTELLIGENCE & INGESTION PIPELINE
            ========================================================================= */}
-        <div className="collab-card">
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px', flexWrap: 'wrap', gap: '8px' }}>
-            <label style={{ fontSize: '0.78rem', fontWeight: 700, textTransform: 'uppercase', color: '#6B7280' }}>
-              Document Category / Type
-            </label>
-
-            {/* Document Type Dropdown Selector */}
-            <select
-              value={uploadType}
-              onChange={(e) => setUploadType(e.target.value)}
-              style={{
-                padding: '7px 12px',
-                borderRadius: '8px',
-                border: '1px solid #CBD5E1',
-                fontSize: '0.84rem',
-                backgroundColor: '#FFFFFF',
-                fontWeight: 600,
-                cursor: 'pointer',
-              }}
-            >
-              {UPLOAD_TYPES.map((type) => (
-                <option key={type.id} value={type.id}>
-                  {type.label}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          {/* Quick Buttons for Document Type */}
-          <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginBottom: '14px' }}>
-            {UPLOAD_TYPES.map((type) => (
+        <div className="collab-card" style={{ border: '1px solid #E2E8F0', background: '#FFFFFF' }}>
+          {/* Mode Switcher Header */}
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', flexWrap: 'wrap', gap: '12px' }}>
+            <div style={{ display: 'flex', gap: '6px', background: '#F1F5F9', padding: '4px', borderRadius: '10px' }}>
               <button
-                key={type.id}
                 type="button"
-                className={`btn btn-sm ${uploadType === type.id ? 'btn-forest' : 'btn-secondary'}`}
-                onClick={() => setUploadType(type.id)}
+                className="btn btn-sm"
+                onClick={() => setInputMode('file')}
+                style={{
+                  background: inputMode === 'file' ? '#FFFFFF' : 'transparent',
+                  color: inputMode === 'file' ? '#1B3B2E' : '#64748B',
+                  fontWeight: inputMode === 'file' ? 700 : 500,
+                  boxShadow: inputMode === 'file' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none',
+                  border: 'none',
+                  borderRadius: '7px',
+                  padding: '6px 14px',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px'
+                }}
               >
-                {type.label}
+                <span>📁 Upload File</span>
               </button>
-            ))}
+              <button
+                type="button"
+                className="btn btn-sm"
+                onClick={() => setInputMode('text')}
+                style={{
+                  background: inputMode === 'text' ? '#FFFFFF' : 'transparent',
+                  color: inputMode === 'text' ? '#1B3B2E' : '#64748B',
+                  fontWeight: inputMode === 'text' ? 700 : 500,
+                  boxShadow: inputMode === 'text' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none',
+                  border: 'none',
+                  borderRadius: '7px',
+                  padding: '6px 14px',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px'
+                }}
+              >
+                <span>📝 Paste Syllabus / Circular</span>
+              </button>
+            </div>
+
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <span
+                style={{
+                  background: '#ECFDF5',
+                  color: '#065F46',
+                  border: '1px solid #A7F3D0',
+                  padding: '3px 10px',
+                  borderRadius: '12px',
+                  fontSize: '11px',
+                  fontWeight: 700,
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '5px'
+                }}
+              >
+                <span>⚡ Groq AI:</span>
+                <code>openai/gpt-oss-120b</code>
+              </span>
+            </div>
           </div>
 
-          <div style={{ fontSize: '0.76rem', color: '#64748B', marginBottom: '12px' }}>
-            ℹ️ {UPLOAD_TYPES.find((t) => t.id === uploadType)?.description}
-          </div>
+          {/* MODE 1: FILE DROPZONE */}
+          {inputMode === 'file' && (
+            <div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px', flexWrap: 'wrap', gap: '8px' }}>
+                <label style={{ fontSize: '0.78rem', fontWeight: 700, textTransform: 'uppercase', color: '#6B7280' }}>
+                  Document Category / Type
+                </label>
 
-          {/* Dropzone */}
-          <div
-            className="metric-card"
-            onDragOver={(e) => {
-              e.preventDefault();
-              setDragOver(true);
-            }}
-            onDragLeave={() => setDragOver(false)}
-            onDrop={handleDrop}
-            style={{
-              border: dragOver ? '2px dashed #1B3B2E' : '2px dashed #CBD5E1',
-              background: dragOver ? '#E7F0EA' : '#FFFFFF',
-              textAlign: 'center',
-              padding: '36px 24px',
-              cursor: 'pointer',
-              transition: 'all 0.2s ease',
-            }}
-            onClick={() => document.getElementById('file-input')?.click()}
-          >
-            <input
-              id="file-input"
-              type="file"
-              accept=".pdf,.png,.jpg,.jpeg,.webp,.csv,.json,.ics"
-              onChange={handleFileInput}
-              style={{ display: 'none' }}
-            />
-
-            {isProcessing ? (
-              <div>
-                <div style={{ fontSize: '2rem', marginBottom: '10px' }}>⏳</div>
-                <h3 style={{ fontSize: '1.15rem', fontWeight: 700, marginBottom: '6px' }}>
-                  {stageMessage || 'Processing document...'}
-                </h3>
-                <p style={{ fontSize: '0.82rem', color: '#6B7280', marginBottom: '14px' }}>
-                  Pipeline Stage: <strong style={{ color: '#1B3B2E' }}>{pipelineStage.toUpperCase()}</strong>
-                </p>
-
-                {/* Pipeline Stage Tracker */}
-                <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '8px', fontSize: '0.78rem', color: '#475569', flexWrap: 'wrap' }}>
-                  <span style={{ fontWeight: pipelineStage === 'pending' || pipelineStage === 'parsed' ? 700 : 400, color: pipelineStage === 'pending' ? '#B45309' : '#1F5C3D' }}>
-                    1. Upload & Parse {pipelineStage !== 'pending' ? '✓' : ''}
-                  </span>
-                  <span>→</span>
-                  <span style={{ fontWeight: pipelineStage === 'extracted' ? 700 : 400, color: pipelineStage === 'extracted' ? '#B45309' : '#1F5C3D' }}>
-                    2. Extract Entities {pipelineStage === 'normalized' || pipelineStage === 'done' ? '✓' : ''}
-                  </span>
-                  <span>→</span>
-                  <span style={{ fontWeight: pipelineStage === 'normalized' ? 700 : 400, color: pipelineStage === 'normalized' ? '#B45309' : '#1F5C3D' }}>
-                    3. Normalize & Deduplicate {pipelineStage === 'done' ? '✓' : ''}
-                  </span>
-                  <span>→</span>
-                  <span style={{ fontWeight: pipelineStage === 'done' ? 700 : 400, color: '#1F5C3D' }}>
-                    4. Complete
-                  </span>
-                </div>
+                {/* Document Type Dropdown Selector */}
+                <select
+                  value={uploadType}
+                  onChange={(e) => setUploadType(e.target.value)}
+                  style={{
+                    padding: '7px 12px',
+                    borderRadius: '8px',
+                    border: '1px solid #CBD5E1',
+                    fontSize: '0.84rem',
+                    backgroundColor: '#FFFFFF',
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                  }}
+                >
+                  {UPLOAD_TYPES.map((type) => (
+                    <option key={type.id} value={type.id}>
+                      {type.label}
+                    </option>
+                  ))}
+                </select>
               </div>
-            ) : uploadSuccess ? (
-              <div>
-                <div style={{ fontSize: '2.4rem', marginBottom: '8px' }}>🎉</div>
-                <h3 style={{ fontSize: '1.2rem', fontWeight: 700, color: '#15803D', marginBottom: '6px' }}>
-                  Document Ingestion Complete!
-                </h3>
-                <p style={{ fontSize: '0.84rem', color: '#475569', marginBottom: '14px' }}>
-                  {uploadedFile ? uploadedFile.name : 'File'} successfully processed. Tasks and events have been saved to your database.
-                </p>
-                <div style={{ display: 'flex', gap: '10px', justifyContent: 'center', flexWrap: 'wrap' }}>
+
+              {/* Quick Buttons for Document Type */}
+              <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginBottom: '14px' }}>
+                {UPLOAD_TYPES.map((type) => (
+                  <button
+                    key={type.id}
+                    type="button"
+                    className={`btn btn-sm ${uploadType === type.id ? 'btn-forest' : 'btn-secondary'}`}
+                    onClick={() => setUploadType(type.id)}
+                  >
+                    {type.label}
+                  </button>
+                ))}
+              </div>
+
+              <div style={{ fontSize: '0.76rem', color: '#64748B', marginBottom: '12px' }}>
+                ℹ️ {UPLOAD_TYPES.find((t) => t.id === uploadType)?.description}
+              </div>
+
+              {/* Dropzone */}
+              <div
+                className="metric-card"
+                onDragOver={(e) => {
+                  e.preventDefault();
+                  setDragOver(true);
+                }}
+                onDragLeave={() => setDragOver(false)}
+                onDrop={handleDrop}
+                style={{
+                  border: dragOver ? '2px dashed #1B3B2E' : '2px dashed #CBD5E1',
+                  background: dragOver ? '#E7F0EA' : '#FFFFFF',
+                  textAlign: 'center',
+                  padding: '36px 24px',
+                  cursor: 'pointer',
+                  transition: 'all 0.2s ease',
+                }}
+                onClick={() => document.getElementById('file-input')?.click()}
+              >
+                <input
+                  id="file-input"
+                  type="file"
+                  accept=".pdf,.png,.jpg,.jpeg,.webp,.csv,.json,.ics"
+                  onChange={handleFileInput}
+                  style={{ display: 'none' }}
+                />
+
+                {isProcessing ? (
+                  <div>
+                    <div style={{ fontSize: '2rem', marginBottom: '10px' }}>⏳</div>
+                    <h3 style={{ fontSize: '1.15rem', fontWeight: 700, marginBottom: '6px' }}>
+                      {stageMessage || 'Processing document...'}
+                    </h3>
+                    <p style={{ fontSize: '0.82rem', color: '#6B7280', marginBottom: '14px' }}>
+                      Pipeline Stage: <strong style={{ color: '#1B3B2E' }}>{pipelineStage.toUpperCase()}</strong>
+                    </p>
+
+                    {/* Pipeline Stage Tracker */}
+                    <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '8px', fontSize: '0.78rem', color: '#475569', flexWrap: 'wrap' }}>
+                      <span style={{ fontWeight: pipelineStage === 'pending' || pipelineStage === 'parsed' ? 700 : 400, color: pipelineStage === 'pending' ? '#B45309' : '#1F5C3D' }}>
+                        1. Upload & Parse {pipelineStage !== 'pending' ? '✓' : ''}
+                      </span>
+                      <span>→</span>
+                      <span style={{ fontWeight: pipelineStage === 'extracted' ? 700 : 400, color: pipelineStage === 'extracted' ? '#B45309' : '#1F5C3D' }}>
+                        2. Extract Entities {pipelineStage === 'normalized' || pipelineStage === 'done' ? '✓' : ''}
+                      </span>
+                      <span>→</span>
+                      <span style={{ fontWeight: pipelineStage === 'normalized' ? 700 : 400, color: pipelineStage === 'normalized' ? '#B45309' : '#1F5C3D' }}>
+                        3. Normalize & Deduplicate {pipelineStage === 'done' ? '✓' : ''}
+                      </span>
+                      <span>→</span>
+                      <span style={{ fontWeight: pipelineStage === 'done' ? 700 : 400, color: '#1F5C3D' }}>
+                        4. Complete
+                      </span>
+                    </div>
+                  </div>
+                ) : uploadSuccess ? (
+                  <div>
+                    <div style={{ fontSize: '2.4rem', marginBottom: '8px' }}>🎉</div>
+                    <h3 style={{ fontSize: '1.2rem', fontWeight: 700, color: '#15803D', marginBottom: '6px' }}>
+                      Document Ingestion Complete!
+                    </h3>
+                    <p style={{ fontSize: '0.84rem', color: '#475569', marginBottom: '14px' }}>
+                      {uploadedFile ? uploadedFile.name : 'File'} successfully processed. Tasks and events have been saved to your database.
+                    </p>
+                    <div style={{ display: 'flex', gap: '10px', justifyContent: 'center', flexWrap: 'wrap' }}>
+                      <button
+                        type="button"
+                        className="btn btn-forest btn-sm"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setReviewRawText('');
+                          setIsReviewOpen(true);
+                        }}
+                      >
+                        ✨ Open Document Intelligence Studio
+                      </button>
+                      <button
+                        type="button"
+                        className="btn btn-secondary btn-sm"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          resetUpload();
+                        }}
+                      >
+                        Upload Another Document
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div>
+                    <div style={{ fontSize: '2.4rem', marginBottom: '10px' }}>📄</div>
+                    <h3 style={{ fontSize: '1.2rem', fontWeight: 700, marginBottom: '6px' }}>
+                      Drag & Drop Academic Document Here
+                    </h3>
+                    <p style={{ fontSize: '0.84rem', color: '#6B7280', marginBottom: '14px' }}>
+                      Supports PDF timetables, syllabi, exam rubrics, holiday lists (.pdf, .png, .jpg, .csv, .json, .ics)
+                    </p>
+                    <div style={{ display: 'flex', gap: '10px', justifyContent: 'center', flexWrap: 'wrap' }}>
+                      <button
+                        type="button"
+                        className="btn btn-forest btn-sm"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          document.getElementById('file-input')?.click();
+                        }}
+                      >
+                        Browse Computer Files
+                      </button>
+                      <button
+                        type="button"
+                        className="btn btn-secondary btn-sm"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setInputMode('text');
+                        }}
+                      >
+                        ✍️ Paste Syllabus Text Instead
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* MODE 2: DIRECT SYLLABUS & TEXT PASTE */}
+          {inputMode === 'text' && (
+            <div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px', flexWrap: 'wrap', gap: '8px' }}>
+                <label style={{ fontSize: '0.78rem', fontWeight: 700, textTransform: 'uppercase', color: '#6B7280' }}>
+                  Paste Syllabus, Timetable, or Circular Text
+                </label>
+
+                {/* Quick Sample Selector */}
+                <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+                  <span style={{ fontSize: '0.76rem', color: '#64748B' }}>Quick Samples:</span>
                   <button
                     type="button"
-                    className="btn btn-forest btn-sm"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setIsReviewOpen(true);
-                    }}
+                    className="btn btn-secondary btn-sm"
+                    style={{ fontSize: '0.74rem', padding: '3px 8px' }}
+                    onClick={() => setPasteText(SAMPLE_DOCUMENTS.cs450)}
                   >
-                    ✨ Review Extracted Items (Groq Llama 3.3)
+                    CS450 Distributed
                   </button>
                   <button
                     type="button"
                     className="btn btn-secondary btn-sm"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      resetUpload();
-                    }}
+                    style={{ fontSize: '0.74rem', padding: '3px 8px' }}
+                    onClick={() => setPasteText(SAMPLE_DOCUMENTS.math201)}
                   >
-                    Upload Another Document
+                    MATH201 Linear Alg
+                  </button>
+                  <button
+                    type="button"
+                    className="btn btn-secondary btn-sm"
+                    style={{ fontSize: '0.74rem', padding: '3px 8px' }}
+                    onClick={() => setPasteText(SAMPLE_DOCUMENTS.fest)}
+                  >
+                    TechFest Circular
                   </button>
                 </div>
               </div>
-            ) : (
-              <div>
-                <div style={{ fontSize: '2.4rem', marginBottom: '10px' }}>📄</div>
-                <h3 style={{ fontSize: '1.2rem', fontWeight: 700, marginBottom: '6px' }}>
-                  Drag & Drop Academic Document Here
-                </h3>
-                <p style={{ fontSize: '0.84rem', color: '#6B7280', marginBottom: '14px' }}>
-                  Supports PDF timetables, syllabi, exam rubrics, holiday lists (.pdf, .png, .jpg, .csv, .json, .ics)
-                </p>
+
+              <textarea
+                value={pasteText}
+                onChange={(e) => setPasteText(e.target.value)}
+                rows={9}
+                placeholder="Paste course syllabus, grading breakdown, exam schedules, or lecture times here..."
+                style={{
+                  width: '100%',
+                  padding: '12px 16px',
+                  borderRadius: '10px',
+                  border: '1px solid #CBD5E1',
+                  fontSize: '0.84rem',
+                  fontFamily: 'monospace',
+                  backgroundColor: '#F8FAFC',
+                  color: '#0F172A',
+                  resize: 'vertical',
+                  boxSizing: 'border-box',
+                  lineHeight: 1.45,
+                }}
+              />
+
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '12px', flexWrap: 'wrap', gap: '10px' }}>
+                <span style={{ fontSize: '0.76rem', color: '#64748B' }}>
+                  {pasteText.length} characters • Powered by Groq <code>openai/gpt-oss-120b</code>
+                </span>
+
                 <button
                   type="button"
-                  className="btn btn-forest btn-sm"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    document.getElementById('file-input')?.click();
+                  className="btn btn-forest"
+                  style={{
+                    padding: '8px 20px',
+                    fontSize: '0.86rem',
+                    fontWeight: 700,
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    boxShadow: '0 2px 8px rgba(27,59,46,0.25)'
+                  }}
+                  disabled={!pasteText.trim()}
+                  onClick={() => {
+                    setReviewRawText(pasteText);
+                    setCurrentUploadId(null);
+                    setIsReviewOpen(true);
                   }}
                 >
-                  Browse Computer Files
+                  🚀 Analyze in Document Studio
                 </button>
               </div>
-            )}
-          </div>
+            </div>
+          )}
 
           {/* Failure Error Feedback */}
           {errorMessage && (
@@ -593,6 +810,7 @@ export default function Upload() {
         isOpen={isReviewOpen}
         onClose={() => setIsReviewOpen(false)}
         uploadId={currentUploadId}
+        rawText={reviewRawText}
       />
     </div>
   );

@@ -21,8 +21,13 @@ export function ToastProvider({ children }) {
     }
   }, [removeToast]);
 
+  const success = useCallback((msg, duration) => addToast(msg, 'success', duration), [addToast]);
+  const error = useCallback((msg, duration) => addToast(msg, 'error', duration), [addToast]);
+  const info = useCallback((msg, duration) => addToast(msg, 'info', duration), [addToast]);
+  const warning = useCallback((msg, duration) => addToast(msg, 'warning', duration), [addToast]);
+
   return (
-    <ToastContext.Provider value={{ addToast, removeToast }}>
+    <ToastContext.Provider value={{ addToast, removeToast, success, error, info, warning }}>
       {children}
       {/* Toast Notification Container */}
       <div

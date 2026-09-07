@@ -1,6 +1,7 @@
 import os
 import json
 import re
+import logging
 from typing import Any, Type
 from dotenv import load_dotenv
 import anthropic
@@ -12,8 +13,15 @@ from schemas import (
     AssignmentItem,
     CalendarEventItem,
 )
+from services.groq_service import (
+    call_groq_chat,
+    clean_groq_json_response,
+    get_groq_api_key,
+    EXTRACTION_MODEL,
+)
 
 load_dotenv()
+logger = logging.getLogger(__name__)
 
 # Official Anthropic Claude model specified by user
 MODEL_NAME = os.getenv("ANTHROPIC_MODEL", "claude-sonnet-4-6")
@@ -270,13 +278,9 @@ def heuristic_fallback_extractor(upload_type: str, raw_text: str) -> list[dict]:
 
 def extract_structured_data(upload_type: str, raw_text: str) -> list[dict]:
     """
-    Calls Anthropic claude-sonnet-4-6 to extract structured JSON data from raw document text.
-    Validates output using Pydantic models. Falls back to heuristic extraction if no key is configured.
+    Extracts structured JSON data from raw document text using AI (Groq / Anthropic)
+    and validates output against Pydantic models. Falls back gracefully to heuristic extraction.
     """
-    api_key = os.getenv("ANTHROPIC_API_KEY")
-    if not api_key:
-        return heuristic_fallback_extractor(upload_type, raw_text)
-
     if upload_type not in TYPE_SCHEMA_MAPPING:
         raise ValueError(f"Unsupported upload type for extraction: '{upload_type}'")
 
@@ -303,16 +307,41 @@ Raw Document Text:
 
 Extract all items present in the text according to the reference schema. Return ONLY the JSON array:"""
 
-    client = anthropic.Anthropic(api_key=api_key)
+    # 1. Primary: Groq AI Extraction
+    groq_key = get_groq_api_key()
+    if groq_key:
+        try:
+            logger.info("Extracting structured %s data using Groq AI (%s)...", upload_type, EXTRACTION_MODEL)
+            raw_output = call_groq_chat(
+                prompt=user_prompt,
+                model=EXTRACTION_MODEL,
+                temperature=0.0,
+                system_prompt=system_prompt,
+            )
+            cleaned = clean_groq_json_response(raw_output)
+            return validate_and_parse_json(cleaned, upload_type)
+        except Exception as groq_err:
+            logger.warning("Groq AI extraction encountered an error: %s. Trying fallbacks...", groq_err)
 
-    response = client.messages.create(
-        model=MODEL_NAME,
-        max_tokens=4096,
-        temperature=0.0,
-        system=system_prompt,
-        messages=[{"role": "user", "content": user_prompt}]
-    )
+    # 2. Secondary: Anthropic Claude (if configured)
+    api_key = os.getenv("ANTHROPIC_API_KEY")
+    if api_key:
+        try:
+            logger.info("Extracting structured %s data using Anthropic (%s)...", upload_type, MODEL_NAME)
+            client = anthropic.Anthropic(api_key=api_key)
+            response = client.messages.create(
+                model=MODEL_NAME,
+                max_tokens=4096,
+                temperature=0.0,
+                system=system_prompt,
+                messages=[{"role": "user", "content": user_prompt}]
+            )
+            raw_output = response.content[0].text
+            return validate_and_parse_json(raw_output, upload_type)
+        except Exception as anth_err:
+            logger.warning("Anthropic extraction failed: %s. Falling back to heuristics...", anth_err)
 
-    raw_output = response.content[0].text
-    return validate_and_parse_json(raw_output, upload_type)
+    # 3. Deterministic Heuristic Fallback
+    logger.info("Using heuristic fallback extractor for %s...", upload_type)
+    return heuristic_fallback_extractor(upload_type, raw_text)
 
