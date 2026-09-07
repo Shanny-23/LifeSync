@@ -81,6 +81,8 @@ h1, h2, h3, h4, h5, h6 {
   padding: 3px 8px;
   border-radius: var(--radius-full);
   line-height: 1;
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .pill-eyebrow.forest {
@@ -1390,8 +1392,20 @@ h1, h2, h3, h4, h5, h6 {
 
 /* Next 48 Hours */
 .lookahead-item {
-  padding: 8px 0;
+  padding: 10px 10px;
+  margin: 0 -4px;
+  border-radius: 8px;
   border-bottom: 1px solid var(--color-neutral-light);
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.lookahead-item:hover {
+  background-color: #F8FAFC;
+  transform: translateX(2px);
 }
 
 .lookahead-item:last-child {
@@ -1402,6 +1416,7 @@ h1, h2, h3, h4, h5, h6 {
   font-size: 0.82rem;
   font-weight: 700;
   color: #0F172A;
+  line-height: 1.35;
 }
 
 .lookahead-time {

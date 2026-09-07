@@ -15,6 +15,31 @@ import { useToast } from '../context/ToastContext';
 import { getTasks } from '../api';
 import gsap, { prefersReducedMotion } from '../lib/gsap';
 
+function formatSlotTime(slotStr, deadlineStr) {
+  if (slotStr) {
+    const match = slotStr.match(/^(\d{4})-(\d{2})-(\d{2})\s+(\d{2}:\d{2}\s*-\s*\d{2}:\d{2})$/);
+    if (match) {
+      const [, year, month, day, timeRange] = match;
+      const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+      const monthName = monthNames[parseInt(month, 10) - 1] || month;
+      return `${monthName} ${parseInt(day, 10)} • ${timeRange.replace(/\s+/g, ' ')}`;
+    }
+    return slotStr;
+  }
+  if (deadlineStr) {
+    try {
+      const d = new Date(deadlineStr);
+      if (!isNaN(d.getTime())) {
+        return `Due ${format(d, 'MMM d, h:mm a')}`;
+      }
+    } catch {
+      // fallback
+    }
+    return `Due ${deadlineStr.replace('T', ' ').slice(0, 16)}`;
+  }
+  return 'Flexible Schedule';
+}
+
 export default function RightRail({ onCalendarToggle, onTaskSelect, onDateSelect }) {
   const toast = useToast();
   const tasksListRef = useRef(null);
@@ -204,17 +229,73 @@ export default function RightRail({ onCalendarToggle, onTaskSelect, onDateSelect
                 key={task.id}
                 className="lookahead-item"
                 onClick={() => handleTaskClick(task)}
-                style={{ cursor: 'pointer', transition: 'transform 0.15s ease' }}
                 title="Click to inspect task"
               >
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                  <span className="lookahead-title">{task.task || task.title}</span>
-                  <span className={`pill-eyebrow ${(task.urgency === 'high' || (task.priority_score || 0) >= 75) ? 'coral' : 'green'}`}>
-                    {task.priority_score ? `Score ${task.priority_score}` : task.urgency || 'Active'}
+                <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '8px' }}>
+                  <span
+                    className="lookahead-title"
+                    style={{ flex: 1, minWidth: 0 }}
+                  >
+                    {task.task || task.title}
+                  </span>
+                  <span
+                    className={`pill-eyebrow ${(task.urgency === 'high' || (task.priority_score || 0) >= 75) ? 'coral' : 'green'}`}
+                    style={{
+                      flexShrink: 0,
+                      whiteSpace: 'nowrap',
+                      fontSize: '0.62rem',
+                      padding: '2px 7px',
+                      letterSpacing: '0.04em',
+                      marginTop: '1px',
+                    }}
+                  >
+                    Score {task.priority_score || 0}
                   </span>
                 </div>
-                <div className="lookahead-time">
-                  {task.scheduledSlot ? `Slot: ${task.scheduledSlot}` : task.deadline ? `Due: ${task.deadline.replace('T', ' ').slice(0, 16)}` : 'Flexible Schedule'} • {task.category || task.subject || 'General'}
+                <div
+                  className="lookahead-time"
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    gap: '6px',
+                    marginTop: '2px',
+                  }}
+                >
+                  <span
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '4px',
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      whiteSpace: 'nowrap',
+                      minWidth: 0,
+                      color: '#64748B',
+                      fontSize: '0.72rem',
+                    }}
+                    title={formatSlotTime(task.scheduledSlot, task.deadline)}
+                  >
+                    <span style={{ fontSize: '0.72rem', opacity: 0.8 }}>🕒</span>
+                    <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {formatSlotTime(task.scheduledSlot, task.deadline)}
+                    </span>
+                  </span>
+                  <span
+                    style={{
+                      flexShrink: 0,
+                      background: '#F1F5F9',
+                      color: '#334155',
+                      padding: '1px 6px',
+                      borderRadius: '4px',
+                      fontWeight: 600,
+                      fontSize: '0.65rem',
+                      letterSpacing: '0.02em',
+                      border: '1px solid #E2E8F0',
+                    }}
+                  >
+                    {task.category || task.subject || 'General'}
+                  </span>
                 </div>
               </div>
             ))
