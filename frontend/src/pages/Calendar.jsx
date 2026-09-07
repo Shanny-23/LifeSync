@@ -104,7 +104,7 @@ export default function Calendar() {
     try {
       const [liveSchedule, liveEvents, liveTasks] = await Promise.all([
         getSchedule({ from: fromDateStr, to: toDateStr, status: 'all' }),
-        getEvents({ from: fromDateStr, to: toDateStr }),
+        getEvents(),
         getTasks(),
       ]);
 
@@ -201,6 +201,29 @@ export default function Calendar() {
     }
   };
 
+  // Sorted list of unique academic milestones from events
+  const academicMilestones = useMemo(() => {
+    const list = [];
+    const seen = new Set();
+    events.forEach((ev) => {
+      const evStart = ev.start_datetime ? new Date(ev.start_datetime) : null;
+      const dStr = evStart ? format(evStart, 'yyyy-MM-dd') : ev.date;
+      if (!dStr) return;
+      const key = `${dStr}_${ev.title}`;
+      if (!seen.has(key)) {
+        seen.add(key);
+        list.push({
+          id: ev.id,
+          title: ev.title,
+          type: ev.type || 'event',
+          dateStr: dStr,
+          dateDisplay: evStart ? format(evStart, 'MMM d, yyyy') : dStr,
+        });
+      }
+    });
+    return list.sort((a, b) => a.dateStr.localeCompare(b.dateStr));
+  }, [events]);
+
   // ---------------------------------------------------------------------------
   // Aggregate unified commitments for a specific date (YYYY-MM-DD)
   // ---------------------------------------------------------------------------
@@ -211,13 +234,16 @@ export default function Calendar() {
       // 1. Academic Events & Fixed Classes (models.Event)
       events.forEach((ev) => {
         const evStart = ev.start_datetime ? new Date(ev.start_datetime) : null;
-        const evDateStr = evStart ? format(evStart, 'yyyy-MM-dd') : ev.date || '';
+        const evEnd = ev.end_datetime ? new Date(ev.end_datetime) : evStart;
+        const sDateStr = evStart ? format(evStart, 'yyyy-MM-dd') : (ev.date || '');
+        const eDateStr = evEnd ? format(evEnd, 'yyyy-MM-dd') : sDateStr;
 
-        if (evDateStr === targetDateStr) {
+        if (targetDateStr >= sDateStr && targetDateStr <= eDateStr) {
+          const isHoliday = ev.type === 'holiday';
           const isExam = ev.type === 'exam' || ev.type === 'exam_work';
           const isClass = ev.type === 'class' || ev.type === 'class_session';
           const isFest = ev.type === 'fest';
-          const isHoliday = ev.type === 'holiday';
+          const isAcademic = ev.type === 'academic_event';
 
           const startTimeStr = evStart ? format(evStart, 'HH:mm') : '09:00';
           const endTimeStr = ev.end_datetime ? format(new Date(ev.end_datetime), 'HH:mm') : '';
@@ -227,16 +253,16 @@ export default function Calendar() {
             entityType: 'event',
             type: ev.type,
             title: ev.title,
-            subject: ev.subject || 'Academic',
+            subject: ev.subject || (isHoliday ? 'Campus Holiday' : isAcademic ? 'Academic Calendar' : 'Academic'),
             location: ev.location || '',
             description: ev.description || '',
             start_time: startTimeStr,
             end_time: endTimeStr,
             timeLabel: endTimeStr ? `${startTimeStr} – ${endTimeStr}` : startTimeStr,
             rawSortTime: startTimeStr,
-            badge: isExam ? 'EXAM / TEST' : isClass ? 'CLASS SESSION' : isFest ? 'CAMPUS FEST' : isHoliday ? 'HOLIDAY' : 'CAMPUS EVENT',
-            urgency: isExam ? 'high' : 'medium',
-            colorTheme: isExam ? 'exam' : isClass ? 'class' : isFest ? 'fest' : 'default',
+            badge: isHoliday ? 'HOLIDAY' : isExam ? 'EXAM / TEST' : isClass ? 'CLASS SESSION' : isFest ? 'CAMPUS FEST' : isAcademic ? 'ACADEMIC EVENT' : 'CAMPUS EVENT',
+            urgency: isExam ? 'high' : isHoliday ? 'low' : 'medium',
+            colorTheme: isHoliday ? 'holiday' : isExam ? 'exam' : isClass ? 'class' : isFest ? 'fest' : isAcademic ? 'academic' : 'default',
             data: ev,
           });
         }
@@ -409,6 +435,18 @@ export default function Calendar() {
               🛡️ Check Conflicts
             </button>
 
+            <a
+              href="https://calendar.google.com"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="btn btn-secondary btn-sm"
+              style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', textDecoration: 'none' }}
+              title="Open Google Calendar where your external and synced events are saved"
+            >
+              <span>📅</span>
+              <span>Open Google Calendar ↗</span>
+            </a>
+
             <button
               className="btn btn-primary btn-sm"
               onClick={handleGenerateSchedule}
@@ -496,6 +534,98 @@ export default function Calendar() {
         {/* 2. Metrics Row */}
         <AtAGlanceMetrics tasks={tasks} />
 
+        {/* Academic Milestones Quick Jump Selector */}
+        {academicMilestones.length > 0 && (
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              gap: '12px',
+              padding: '12px 18px',
+              background: '#FFFFFF',
+              border: '1px solid #E2E8F0',
+              borderRadius: '12px',
+              boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
+              flexWrap: 'wrap',
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <span style={{ fontSize: '1.2rem' }}>📌</span>
+              <div>
+                <div style={{ fontSize: '0.86rem', fontWeight: 700, color: '#0F172A' }}>
+                  Academic Circular Milestones & Holidays
+                </div>
+                <div style={{ fontSize: '0.74rem', color: '#64748B' }}>
+                  {academicMilestones.length} dates extracted & synced across semester
+                </div>
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+              <select
+                aria-label="Jump to academic milestone"
+                style={{
+                  padding: '6px 12px',
+                  borderRadius: '8px',
+                  border: '1px solid #CBD5E1',
+                  background: '#F8FAFC',
+                  fontSize: '0.8rem',
+                  fontWeight: 600,
+                  color: '#1E293B',
+                  cursor: 'pointer',
+                  maxWidth: '320px',
+                }}
+                onChange={(e) => {
+                  if (!e.target.value) return;
+                  const targetDate = e.target.value;
+                  setSelectedDayStr(targetDate);
+                  setAnchorDate(new Date(targetDate + 'T00:00:00'));
+                  setViewMode('Day');
+                }}
+                value={academicMilestones.some((m) => m.dateStr === selectedDayStr) ? selectedDayStr : ''}
+              >
+                <option value="">Jump directly to any date...</option>
+                {academicMilestones.map((m) => (
+                  <option key={m.id} value={m.dateStr}>
+                    {m.dateDisplay} — {m.title} ({m.type.toUpperCase()})
+                  </option>
+                ))}
+              </select>
+
+              <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+                {academicMilestones
+                  .filter((m) => m.type === 'holiday' || m.type === 'exam')
+                  .slice(0, 3)
+                  .map((m) => (
+                    <button
+                      key={`quick-${m.id}`}
+                      type="button"
+                      className="btn btn-secondary btn-sm"
+                      style={{
+                        padding: '4px 10px',
+                        fontSize: '0.74rem',
+                        fontWeight: 600,
+                        background: selectedDayStr === m.dateStr ? '#1F5C3D' : '#FFFFFF',
+                        color: selectedDayStr === m.dateStr ? '#FFFFFF' : '#334155',
+                        borderColor: selectedDayStr === m.dateStr ? '#1F5C3D' : '#CBD5E1',
+                      }}
+                      onClick={() => {
+                        setSelectedDayStr(m.dateStr);
+                        setAnchorDate(new Date(m.dateStr + 'T00:00:00'));
+                        setViewMode('Day');
+                      }}
+                      title={`${m.dateDisplay}: ${m.title}`}
+                    >
+                      {m.type === 'holiday' ? '🏖️ ' : '📝 '}
+                      {m.title.length > 16 ? m.title.slice(0, 16) + '…' : m.title}
+                    </button>
+                  ))}
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* 3. Week Day Strip Selector (visible in Day & Week views) */}
         {viewMode !== 'Month' && (
           <div className="week-strip-card">
@@ -572,6 +702,8 @@ export default function Calendar() {
                   const isExam = item.colorTheme === 'exam';
                   const isDeadline = item.colorTheme === 'deadline';
                   const isClass = item.colorTheme === 'class';
+                  const isHoliday = item.colorTheme === 'holiday';
+                  const isAcademic = item.colorTheme === 'academic';
                   const isStudy = item.colorTheme === 'study_slot';
 
                   return (
@@ -580,7 +712,17 @@ export default function Calendar() {
                       <div
                         className="timeline-time-label"
                         style={{
-                          color: isExam ? '#B23A3A' : isDeadline ? '#B45309' : isClass ? '#1F5C3D' : '#1B3B2E',
+                          color: isExam
+                            ? '#B23A3A'
+                            : isDeadline
+                            ? '#B45309'
+                            : isHoliday
+                            ? '#7C3AED'
+                            : isAcademic
+                            ? '#1D4ED8'
+                            : isClass
+                            ? '#1F5C3D'
+                            : '#1B3B2E',
                           fontWeight: 700,
                         }}
                       >
@@ -596,6 +738,10 @@ export default function Calendar() {
                               ? '#FEF2F2'
                               : isDeadline
                               ? '#FFFBEB'
+                              : isHoliday
+                              ? '#FAF5FF'
+                              : isAcademic
+                              ? '#EFF6FF'
                               : isClass
                               ? '#F0FDF4'
                               : '#F8FAFC',
@@ -604,6 +750,10 @@ export default function Calendar() {
                                 ? '#FCA5A5'
                                 : isDeadline
                                 ? '#FDE68A'
+                                : isHoliday
+                                ? '#DDD6FE'
+                                : isAcademic
+                                ? '#BFDBFE'
                                 : isClass
                                 ? '#86EFAC'
                                 : '#CBD5E1'
@@ -613,6 +763,10 @@ export default function Calendar() {
                                 ? '#DC2626'
                                 : isDeadline
                                 ? '#D97706'
+                                : isHoliday
+                                ? '#8B5CF6'
+                                : isAcademic
+                                ? '#2563EB'
                                 : isClass
                                 ? '#15803D'
                                 : '#10B981'
@@ -631,6 +785,10 @@ export default function Calendar() {
                                     ? '#FEE2E2'
                                     : isDeadline
                                     ? '#FEF3C7'
+                                    : isHoliday
+                                    ? '#EDE9FE'
+                                    : isAcademic
+                                    ? '#DBEAFE'
                                     : isClass
                                     ? '#DCFCE7'
                                     : '#E0F2FE',
@@ -638,6 +796,10 @@ export default function Calendar() {
                                     ? '#991B1B'
                                     : isDeadline
                                     ? '#92400E'
+                                    : isHoliday
+                                    ? '#6D28D9'
+                                    : isAcademic
+                                    ? '#1E40AF'
                                     : isClass
                                     ? '#166534'
                                     : '#0369A1',
@@ -650,7 +812,17 @@ export default function Calendar() {
                               <strong
                                 style={{
                                   fontSize: '0.95rem',
-                                  color: isExam ? '#991B1B' : isDeadline ? '#92400E' : isClass ? '#14532D' : '#0F172A',
+                                  color: isExam
+                                    ? '#991B1B'
+                                    : isDeadline
+                                    ? '#92400E'
+                                    : isHoliday
+                                    ? '#5B21B6'
+                                    : isAcademic
+                                    ? '#1E3A8A'
+                                    : isClass
+                                    ? '#14532D'
+                                    : '#0F172A',
                                 }}
                               >
                                 {item.title}
@@ -772,6 +944,8 @@ export default function Calendar() {
                           const isExam = item.colorTheme === 'exam';
                           const isDeadline = item.colorTheme === 'deadline';
                           const isClass = item.colorTheme === 'class';
+                          const isHoliday = item.colorTheme === 'holiday';
+                          const isAcademic = item.colorTheme === 'academic';
 
                           return (
                             <div
@@ -780,10 +954,42 @@ export default function Calendar() {
                                 fontSize: '0.7rem',
                                 padding: '4px 6px',
                                 borderRadius: '5px',
-                                background: isExam ? '#FEE2E2' : isDeadline ? '#FEF3C7' : isClass ? '#DCFCE7' : '#F1F5F9',
-                                color: isExam ? '#991B1B' : isDeadline ? '#92400E' : isClass ? '#166534' : '#1E293B',
+                                background: isExam
+                                  ? '#FEE2E2'
+                                  : isDeadline
+                                  ? '#FEF3C7'
+                                  : isHoliday
+                                  ? '#EDE9FE'
+                                  : isAcademic
+                                  ? '#DBEAFE'
+                                  : isClass
+                                  ? '#DCFCE7'
+                                  : '#F1F5F9',
+                                color: isExam
+                                  ? '#991B1B'
+                                  : isDeadline
+                                  ? '#92400E'
+                                  : isHoliday
+                                  ? '#6D28D9'
+                                  : isAcademic
+                                  ? '#1E40AF'
+                                  : isClass
+                                  ? '#166534'
+                                  : '#1E293B',
                                 fontWeight: 600,
-                                borderLeft: `3px solid ${isExam ? '#DC2626' : isDeadline ? '#D97706' : isClass ? '#15803D' : '#64748B'}`,
+                                borderLeft: `3px solid ${
+                                  isExam
+                                    ? '#DC2626'
+                                    : isDeadline
+                                    ? '#D97706'
+                                    : isHoliday
+                                    ? '#8B5CF6'
+                                    : isAcademic
+                                    ? '#2563EB'
+                                    : isClass
+                                    ? '#15803D'
+                                    : '#64748B'
+                                }`,
                               }}
                             >
                               <div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>

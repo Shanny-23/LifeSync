@@ -45,10 +45,13 @@ class UploadStatusResponse(BaseModel):
 
 class TimetableItem(BaseModel):
     day: str = Field(..., description="Day of the week (e.g., Monday, Tue)")
-    start_time: str = Field(..., description="Start time (e.g. 09:00 AM or 09:00)")
-    end_time: str = Field(..., description="End time (e.g. 10:30 AM or 10:30)")
-    subject: str = Field(..., description="Subject, course name, or code")
+    start_time: Optional[str] = Field(default="", description="Start time (e.g. 09:00 AM or 09:00)")
+    end_time: Optional[str] = Field(default="", description="End time (e.g. 10:30 AM or 10:30)")
+    subject: str = Field(..., description="Subject, course name, event title, or milestone")
     location: Optional[str] = Field(default=None, description="Room number, lab, or hall")
+    date: Optional[str] = Field(default=None, description="Specific date if mentioned in document, e.g. YYYY-MM-DD or DD.MM.YYYY")
+    end_date: Optional[str] = Field(default=None, description="Specific end date if date range, e.g. YYYY-MM-DD or DD.MM.YYYY")
+    type: Optional[str] = Field(default=None, description="Event type: holiday, exam, academic_event, class_session")
 
 
 class SyllabusItem(BaseModel):

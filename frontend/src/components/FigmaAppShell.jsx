@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import ReadinessGauge from './ReadinessGauge';
 import WeeklyStudyChart from './WeeklyStudyChart';
 import StickyFocusPlayer from './StickyFocusPlayer';
+import SpacedReviewModal from './SpacedReviewModal';
 import { useToast } from '../context/ToastContext';
 
 export default function FigmaAppShell({
@@ -15,6 +16,7 @@ export default function FigmaAppShell({
   const [currentTime, setCurrentTime] = useState('9:41');
   const [habitChecked, setHabitChecked] = useState(false);
   const [collisionResolved, setCollisionResolved] = useState(false);
+  const [isSpacedReviewModalOpen, setIsSpacedReviewModalOpen] = useState(false);
 
   // Update status bar time
   useEffect(() => {
@@ -314,8 +316,9 @@ export default function FigmaAppShell({
                         border: 'none',
                         borderRadius: '20px',
                         alignSelf: 'flex-start',
+                        cursor: 'pointer',
                       }}
-                      onClick={() => toast.info('Starting Math 204 review session!')}
+                      onClick={() => setIsSpacedReviewModalOpen(true)}
                     >
                       ▶ Start Review Session
                     </button>
@@ -811,6 +814,11 @@ export default function FigmaAppShell({
           </button>
         </div>
       </div>
+
+      <SpacedReviewModal
+        isOpen={isSpacedReviewModalOpen}
+        onClose={() => setIsSpacedReviewModalOpen(false)}
+      />
     </div>
   );
 }

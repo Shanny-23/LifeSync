@@ -40,14 +40,47 @@ class ExtractionValidationError(Exception):
 TYPE_SCHEMA_MAPPING: dict[str, tuple[Type[BaseModel], str, str]] = {
     "timetable": (
         TimetableItem,
-        "Array of timetable slots with keys: day, start_time, end_time, subject, location",
+        "Array of timetable slots, academic calendar events, holidays, and milestones with keys: day, start_time, end_time, subject, location, date (mandatory specific ISO date YYYY-MM-DD if document specifies a date, e.g. 2025-06-04), end_date (specific end date YYYY-MM-DD if date range), type ('holiday' | 'exam' | 'academic_event' | 'class_session')",
         """[
   {
+    "day": "Wednesday",
+    "start_time": "",
+    "end_time": "",
+    "subject": "Course wish list registration by students",
+    "location": null,
+    "date": "2025-06-04",
+    "end_date": null,
+    "type": "academic_event"
+  },
+  {
+    "day": "Friday",
+    "start_time": "",
+    "end_time": "",
+    "subject": "Independence Day (Holiday)",
+    "location": null,
+    "date": "2025-08-15",
+    "end_date": null,
+    "type": "holiday"
+  },
+  {
+    "day": "Sunday",
+    "start_time": "",
+    "end_time": "",
+    "subject": "Continuous Assessment Test -1",
+    "location": null,
+    "date": "2025-08-17",
+    "end_date": "2025-08-23",
+    "type": "exam"
+  },
+  {
     "day": "Monday",
-    "start_time": "09:00",
-    "end_time": "10:30",
-    "subject": "CS101 - Algorithms",
-    "location": "Room 402"
+    "start_time": "10:00",
+    "end_time": "11:30",
+    "subject": "CS101 Algorithms Lecture",
+    "location": "Room 402",
+    "date": null,
+    "end_date": null,
+    "type": "class_session"
   }
 ]"""
     ),
@@ -204,23 +237,49 @@ def heuristic_fallback_extractor(upload_type: str, raw_text: str) -> list[dict]:
             first_line = trimmed
             break
 
-    if upload_type == "timetable":
-        items = [
-            {
-                "day": "Monday",
-                "start_time": "09:00",
-                "end_time": "10:30",
-                "subject": f"{subject} Lecture",
-                "location": "Room 204"
-            },
-            {
-                "day": "Wednesday",
-                "start_time": "14:00",
-                "end_time": "15:30",
-                "subject": f"{subject} Lab",
-                "location": "Lab Hall B"
-            }
-        ]
+    if upload_type in {"timetable", "holiday_calendar"}:
+        from services.parser import parse_academic_calendar_text
+        cal_items = parse_academic_calendar_text(clean_text)
+        if cal_items:
+            if upload_type == "holiday_calendar":
+                # Map to CalendarEventItem schema
+                items = [
+                    {
+                        "name": it["subject"],
+                        "start_date": it["date"],
+                        "end_date": it.get("end_date") or it["date"],
+                        "description": f"Observed event ({it['day']})"
+                    }
+                    for it in cal_items
+                ]
+            else:
+                items = cal_items
+        elif upload_type == "timetable":
+            items = [
+                {
+                    "day": "Monday",
+                    "start_time": "09:00",
+                    "end_time": "10:30",
+                    "subject": f"{subject} Lecture",
+                    "location": "Room 204"
+                },
+                {
+                    "day": "Wednesday",
+                    "start_time": "14:00",
+                    "end_time": "15:30",
+                    "subject": f"{subject} Lab",
+                    "location": "Lab Hall B"
+                }
+            ]
+        else:
+            items = [
+                {
+                    "name": "Campus Recess / Break",
+                    "start_date": "2026-10-12",
+                    "end_date": "2026-10-14",
+                    "description": "University holiday and academic recess"
+                }
+            ]
     elif upload_type == "syllabus":
         items = [
             {
@@ -241,15 +300,6 @@ def heuristic_fallback_extractor(upload_type: str, raw_text: str) -> list[dict]:
                 "title": f"{first_line[:50]}",
                 "deadline": "2026-09-24 23:59",
                 "rubric_notes": "Submit report and source code"
-            }
-        ]
-    elif upload_type == "holiday_calendar":
-        items = [
-            {
-                "name": "Campus Recess / Break",
-                "start_date": "2026-10-12",
-                "end_date": "2026-10-14",
-                "description": "University holiday and academic recess"
             }
         ]
     elif upload_type == "fest_schedule":

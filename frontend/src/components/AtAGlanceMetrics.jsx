@@ -92,9 +92,11 @@ export default function AtAGlanceMetrics({
         {/* Metric 2: Daily Routine - Clickable */}
         <div
           className="metric-card"
-          onClick={() => navigate('/calendar')}
+          onClick={() => {
+            window.open('https://calendar.google.com', '_blank', 'noopener,noreferrer') || (window.location.href = 'https://calendar.google.com');
+          }}
           style={{ cursor: 'pointer', transition: 'all 0.2s ease' }}
-          title="Click to open Daily Routine Schedule"
+          title="Click to open Google Calendar where events are saved"
         >
           <div className="metric-card-header">
             <span className="metric-label">Daily Routine</span>
@@ -110,7 +112,7 @@ export default function AtAGlanceMetrics({
             </div>
           </div>
           <div style={{ fontSize: '0.68rem', color: '#1F5C3D', marginTop: '6px', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '4px' }}>
-            <span>Open Calendar</span> <span>→</span>
+            <span>Open Google Calendar</span> <span>↗</span>
           </div>
         </div>
 

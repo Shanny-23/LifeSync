@@ -260,11 +260,23 @@ export async function analyzeDocument({ text, uploadId, groqKey } = {}) {
   });
 }
 
-export async function commitExtractedItems({ assignments = [], exams = [], events = [], holidays = [] }) {
+export async function commitExtractedItems({
+  assignments = [],
+  exams = [],
+  events = [],
+  holidays = [],
+  sync_to_google_calendar = false,
+}) {
   return request('/api/ai/commit-extracted', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ assignments, exams, events, holidays }),
+    body: JSON.stringify({
+      assignments,
+      exams,
+      events,
+      holidays,
+      sync_to_google_calendar,
+    }),
   });
 }
 

@@ -4,6 +4,9 @@
 .env.*
 !.env.example
 *google-tokens.json
+client_secret.json
+*.credentials.json
+!client_secret.json.example
 
 # Python
 venv/

@@ -324,10 +324,17 @@ export default function RightRail({ onCalendarToggle, onTaskSelect, onDateSelect
           </div>
 
           <div className="calendar-source-item">
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <div
+              style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', flex: 1 }}
+              onClick={() => window.open('https://calendar.google.com', '_blank', 'noopener,noreferrer')}
+              title="Click to open Google Calendar where events are saved"
+            >
               <span className="source-dot" style={{ background: '#2563EB' }} />
               <div>
-                <div style={{ fontSize: '0.8rem', fontWeight: 600 }}>Google Workspace</div>
+                <div style={{ fontSize: '0.8rem', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '4px' }}>
+                  <span>Google Workspace</span>
+                  <span style={{ fontSize: '0.65rem', color: '#2563EB' }}>↗</span>
+                </div>
                 <div style={{ fontSize: '0.68rem', color: '#6B7280' }}>Team meetings & syncs</div>
               </div>
             </div>

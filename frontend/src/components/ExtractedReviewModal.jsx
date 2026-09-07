@@ -11,6 +11,7 @@ export default function ExtractedReviewModal({ isOpen, onClose, uploadId, rawTex
   const [selectedExams, setSelectedExams] = useState([]);
   const [selectedEvents, setSelectedEvents] = useState([]);
   const [selectedHolidays, setSelectedHolidays] = useState([]);
+  const [syncToGoogle, setSyncToGoogle] = useState(true);
   const { addToast } = useToast();
 
   useEffect(() => {
@@ -62,6 +63,7 @@ export default function ExtractedReviewModal({ isOpen, onClose, uploadId, rawTex
         exams: chosenExams,
         events: chosenEvents,
         holidays: chosenHolidays,
+        sync_to_google_calendar: syncToGoogle,
       });
 
       addToast(result.message || `Successfully committed items to LifeSync!`, "success");
@@ -983,17 +985,61 @@ export default function ExtractedReviewModal({ isOpen, onClose, uploadId, rawTex
             alignItems: 'center',
             justifyContent: 'space-between',
             backgroundColor: '#FFFFFF',
+            flexWrap: 'wrap',
+            gap: '12px',
           }}
         >
-          <div style={{ fontSize: '13px', color: '#64748B' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '16px', flexWrap: 'wrap' }}>
             {!loading && (
-              <span>
+              <span style={{ fontSize: '13px', color: '#64748B' }}>
                 Selected for ingestion: <strong>{totalCommitted} item(s)</strong>
               </span>
             )}
+
+            {/* Google Calendar Ingestion Option */}
+            <label
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '8px',
+                cursor: 'pointer',
+                background: syncToGoogle ? '#EFF6FF' : '#F8FAFC',
+                border: `1.5px solid ${syncToGoogle ? '#3B82F6' : '#CBD5E1'}`,
+                padding: '6px 12px',
+                borderRadius: '8px',
+                userSelect: 'none',
+                transition: 'all 0.18s ease',
+              }}
+              title="When checked, also creates these events, exams, and deadlines directly on your Google Calendar"
+            >
+              <input
+                type="checkbox"
+                checked={syncToGoogle}
+                onChange={(e) => setSyncToGoogle(e.target.checked)}
+                style={{
+                  width: '15px',
+                  height: '15px',
+                  accentColor: '#2563EB',
+                  cursor: 'pointer',
+                }}
+              />
+              <span
+                style={{
+                  fontSize: '12.5px',
+                  fontWeight: 600,
+                  color: syncToGoogle ? '#1D4ED8' : '#475569',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '5px',
+                }}
+              >
+                <span>📅</span>
+                <span>Ingest into Google Calendar</span>
+              </span>
+            </label>
           </div>
 
-          <div style={{ display: 'flex', gap: '10px' }}>
+          <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
             <button
               onClick={onClose}
               style={{
@@ -1017,20 +1063,27 @@ export default function ExtractedReviewModal({ isOpen, onClose, uploadId, rawTex
                 padding: '9px 24px',
                 borderRadius: '10px',
                 border: 'none',
-                background: 'linear-gradient(135deg, #1B3B2E 0%, #15803D 100%)',
+                background: syncToGoogle
+                  ? 'linear-gradient(135deg, #1B3B2E 0%, #2563EB 100%)'
+                  : 'linear-gradient(135deg, #1B3B2E 0%, #15803D 100%)',
                 color: '#FFFFFF',
                 fontSize: '13px',
                 fontWeight: 700,
                 cursor: committing || loading || totalCommitted === 0 ? 'not-allowed' : 'pointer',
                 opacity: committing || loading || totalCommitted === 0 ? 0.6 : 1,
-                boxShadow: '0 3px 10px rgba(27,59,46,0.25)',
+                boxShadow: syncToGoogle
+                  ? '0 3px 12px rgba(37,99,235,0.3)'
+                  : '0 3px 10px rgba(27,59,46,0.25)',
                 display: 'flex',
                 alignItems: 'center',
                 gap: '8px',
+                transition: 'all 0.2s ease',
               }}
             >
               {committing ? (
-                <>⏳ Ingesting into LifeSync...</>
+                <>⏳ Ingesting & Syncing...</>
+              ) : syncToGoogle ? (
+                <>📥 Ingest {totalCommitted} Items to LifeSync & Google Calendar</>
               ) : (
                 <>📥 Ingest {totalCommitted} Items to Tasks & Calendar</>
               )}

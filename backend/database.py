@@ -75,6 +75,9 @@ def ensure_db_schema():
 
         add_column_if_missing("user_google_tokens", "access_token", "VARCHAR(500)")
         add_column_if_missing("user_google_tokens", "refresh_token", "VARCHAR(500)")
+        add_column_if_missing("user_google_tokens", "token_uri", "VARCHAR(255)")
+        add_column_if_missing("user_google_tokens", "client_id", "VARCHAR(255)")
+        add_column_if_missing("user_google_tokens", "client_secret", "VARCHAR(255)")
         add_column_if_missing("user_google_tokens", "scopes", "VARCHAR(500)")
         add_column_if_missing("user_google_tokens", "expiry", "DATETIME")
 

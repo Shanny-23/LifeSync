@@ -176,3 +176,100 @@ def extract_text(filepath: str) -> str:
         return extract_text_from_image(filepath)
     else:
         raise ParserError(f"Unsupported file type for text extraction: '{ext}'")
+
+
+def parse_academic_calendar_text(raw_text: str) -> list[dict]:
+    """
+    Extracts dated academic events, holidays, exams, and milestones from text containing
+    patterns like '04.06.2025 Wednesday | Course wish list registration by students'
+    or '09.06.2025 to 20.06.2025 | Monday to Friday Course allocation and scheduling by Schools'.
+    """
+    if not raw_text or not raw_text.strip():
+        return []
+
+    import re
+    import dateutil.parser
+
+    cleaned = raw_text.replace('{', '').replace('|', ' ')
+    # Normalize line breaks between multi-line date ranges:
+    cleaned = re.sub(
+        r'(\d{1,2}[./-]\d{1,2}[./-]\d{4})\s+to\s*(?:\|\s*)?(?:[A-Za-z]+\s+to\s*)?\n\s*(\d{1,2}[./-]\d{1,2}[./-]\d{4})',
+        r'\1 to \2',
+        cleaned
+    )
+
+    DATE_PAT = r'(\d{1,2}[./-]\d{1,2}[./-]\d{4})(?:\s+to\s+(\d{1,2}[./-]\d{1,2}[./-]\d{4}))?'
+    WEEKDAY_PAT = r'(Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday|Mon|Tue|Wed|Thu|Fri|Sat|Sun)'
+
+    results = []
+    seen = set()
+
+    for line in cleaned.splitlines():
+        line = line.strip()
+        if not line or 'VIT/VLR' in line or 'attendance' in line.lower():
+            continue
+
+        m = re.search(DATE_PAT, line)
+        if not m:
+            continue
+
+        raw_start = m.group(1)
+        raw_end = m.group(2)
+
+        try:
+            start_dt_obj = dateutil.parser.parse(raw_start, dayfirst=True)
+            iso_start = start_dt_obj.strftime('%Y-%m-%d')
+        except Exception:
+            continue
+
+        iso_end = None
+        if raw_end:
+            try:
+                end_dt_obj = dateutil.parser.parse(raw_end, dayfirst=True)
+                iso_end = end_dt_obj.strftime('%Y-%m-%d')
+            except Exception:
+                pass
+
+        day_match = re.search(WEEKDAY_PAT, line, re.I)
+        day_str = day_match.group(1).capitalize() if day_match else start_dt_obj.strftime('%A')
+
+        remainder = line[m.end():].strip()
+        cleaned_title = re.sub(
+            r'^(?:Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday|to|\s|\|)+',
+            '',
+            remainder,
+            flags=re.I
+        ).strip()
+        cleaned_title = re.sub(r'^[–—\-:\s|]+', '', cleaned_title).strip()
+        cleaned_title = cleaned_title.replace('\u2019', "'").replace('\u2018', "'").replace('\ufffd', '-').strip()
+
+        if not cleaned_title or len(cleaned_title) < 3 or cleaned_title.startswith('(Friday)'):
+            continue
+
+        t_low = cleaned_title.lower()
+        if any(w in t_low for w in ['(holiday)', 'holiday', 'no instructional day', 'vacation', 'recess', 'break', 'puja', 'pooja', 'jayanthi', 'deepavali', 'diwali']):
+            ev_type = 'holiday'
+        elif re.search(r'\b(cat\b|fat\b|exam|test|midterm|quiz|assessment|assessment test)\b', t_low):
+            ev_type = 'exam'
+        elif any(w in t_low for w in ['registration', 'commencement', 'withdraw', 'add/drop', 'fee', 'gravitas', 'fest', 'allocation', 'instructional day']):
+            ev_type = 'academic_event'
+        else:
+            ev_type = 'academic_event'
+
+        key = (iso_start, cleaned_title)
+        if key in seen:
+            continue
+        seen.add(key)
+
+        results.append({
+            'day': day_str,
+            'start_time': '09:00',
+            'end_time': '17:00',
+            'subject': cleaned_title,
+            'location': None,
+            'date': iso_start,
+            'end_date': iso_end,
+            'type': ev_type
+        })
+
+    return results

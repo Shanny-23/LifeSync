@@ -6,6 +6,7 @@ import EscalatedDeadlineCard from '../components/EscalatedDeadlineCard';
 import RightRail from '../components/RightRail';
 import TaskDetailModal from '../components/TaskDetailModal';
 import NewTaskModal from '../components/NewTaskModal';
+import SpacedReviewModal from '../components/SpacedReviewModal';
 import { getTasks } from '../api';
 import { useToast } from '../context/ToastContext';
 import { useAuth } from '../context/AuthContext';
@@ -31,7 +32,16 @@ export default function Home() {
   // Modals
   const [selectedTaskForModal, setSelectedTaskForModal] = useState(null);
   const [isNewTaskModalOpen, setIsNewTaskModalOpen] = useState(false);
+  const [isSpacedReviewModalOpen, setIsSpacedReviewModalOpen] = useState(false);
   const [selectedDateFilter, setSelectedDateFilter] = useState(null);
+  const [spacedReviewStatus, setSpacedReviewStatus] = useState(() => {
+    try {
+      const raw = localStorage.getItem('lifesync_spaced_review_status');
+      return raw ? JSON.parse(raw) : null;
+    } catch {
+      return null;
+    }
+  });
 
   async function loadData() {
     try {
@@ -53,12 +63,21 @@ export default function Home() {
     const handleTaskCreated = () => {
       loadData();
     };
+    const handleSpacedReviewUpdated = () => {
+      try {
+        const raw = localStorage.getItem('lifesync_spaced_review_status');
+        setSpacedReviewStatus(raw ? JSON.parse(raw) : null);
+      } catch {}
+    };
+
     window.addEventListener('lifesync:task-created', handleTaskCreated);
     window.addEventListener('lifesync:refresh', handleTaskCreated);
+    window.addEventListener('lifesync:spaced-review-updated', handleSpacedReviewUpdated);
 
     return () => {
       window.removeEventListener('lifesync:task-created', handleTaskCreated);
       window.removeEventListener('lifesync:refresh', handleTaskCreated);
+      window.removeEventListener('lifesync:spaced-review-updated', handleSpacedReviewUpdated);
     };
   }, []);
 
@@ -248,34 +267,62 @@ export default function Home() {
           </div>
 
           {/* Spaced Review Card */}
-          <div className="figma-card-amber">
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <span className="pill-eyebrow amber">Spaced Review</span>
-              <span style={{ fontSize: '0.72rem', color: '#92400E', fontWeight: 700 }}>Slot 2 of 4</span>
-            </div>
-            <div>
-              <div style={{ fontSize: '0.95rem', fontWeight: 800, color: '#14382A' }}>
-                Math 204: Probability & Markov Chains
+          {(() => {
+            const isReviewedToday = Boolean(
+              spacedReviewStatus?.completedAt &&
+              new Date(spacedReviewStatus.completedAt).toDateString() === new Date().toDateString()
+            );
+
+            return (
+              <div
+                className="figma-card-amber"
+                style={{
+                  cursor: 'pointer',
+                  transition: 'transform 0.15s ease, box-shadow 0.15s ease',
+                }}
+                onClick={() => setIsSpacedReviewModalOpen(true)}
+              >
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span className="pill-eyebrow amber">Spaced Review</span>
+                  <span style={{ fontSize: '0.72rem', color: isReviewedToday ? '#047857' : '#92400E', fontWeight: 700 }}>
+                    {isReviewedToday ? '✅ Completed Today' : 'Slot 2 of 4'}
+                  </span>
+                </div>
+                <div>
+                  <div style={{ fontSize: '0.95rem', fontWeight: 800, color: '#14382A' }}>
+                    Math 204: Probability & Markov Chains
+                  </div>
+                  <div style={{ fontSize: '0.72rem', color: '#92400E', marginTop: '3px' }}>
+                    {isReviewedToday
+                      ? `Shield Active (${spacedReviewStatus?.rating ? spacedReviewStatus.rating.toUpperCase() : 'OPTIMAL'} • Next in 24h)`
+                      : 'Retention Decay Shield • Optimal Interval: 24h'}
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  className="btn btn-xs"
+                  style={{
+                    background: isReviewedToday ? '#059669' : '#D97706',
+                    color: '#FFFFFF',
+                    border: 'none',
+                    borderRadius: '20px',
+                    alignSelf: 'flex-start',
+                    fontWeight: 700,
+                    boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '4px',
+                  }}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setIsSpacedReviewModalOpen(true);
+                  }}
+                >
+                  {isReviewedToday ? '✓ Review Again (20m)' : '▶ Review (20m)'}
+                </button>
               </div>
-              <div style={{ fontSize: '0.72rem', color: '#92400E', marginTop: '3px' }}>
-                Retention Decay Shield • Optimal Interval: 24h
-              </div>
-            </div>
-            <button
-              type="button"
-              className="btn btn-xs"
-              style={{
-                background: '#D97706',
-                color: '#FFFFFF',
-                border: 'none',
-                borderRadius: '20px',
-                alignSelf: 'flex-start',
-              }}
-              onClick={() => toast.info('Starting 20-minute active recall review session!')}
-            >
-              ▶ Review (20m)
-            </button>
-          </div>
+            );
+          })()}
         </div>
 
         {/* 5. Routine Habit Row */}
@@ -356,6 +403,12 @@ export default function Home() {
         isOpen={isNewTaskModalOpen}
         onClose={() => setIsNewTaskModalOpen(false)}
         onTaskCreated={() => loadData()}
+      />
+
+      <SpacedReviewModal
+        isOpen={isSpacedReviewModalOpen}
+        onClose={() => setIsSpacedReviewModalOpen(false)}
+        onSessionFinished={() => loadData()}
       />
     </div>
   );

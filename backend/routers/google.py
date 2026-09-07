@@ -1,22 +1,273 @@
-from datetime import datetime, timezone, timedelta
 import os
-from typing import Optional
-from fastapi import APIRouter, Depends, HTTPException, Query
-from fastapi.responses import RedirectResponse
+import logging
+from typing import Optional, List, Dict, Any
+from pathlib import Path
+from datetime import datetime, timezone, timedelta
+
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
+from fastapi.responses import RedirectResponse, HTMLResponse, JSONResponse
+from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
 
 from database import get_db
 import models
-from services.auth_service import get_current_user
+from services.auth_service import get_current_user, get_optional_current_user
+from services.google_service import (
+    SCOPES,
+    create_oauth_flow,
+    save_user_credentials,
+    get_google_credentials,
+    fetch_recent_emails,
+    create_calendar_event_from_email,
+    get_client_secret_path
+)
 
-router = APIRouter(prefix="/api/google", tags=["Google Calendar"])
+logger = logging.getLogger(__name__)
+
+# Template rendering setup
+TEMPLATES_DIR = Path(__file__).resolve().parent.parent / "templates"
+templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
+
+# Create router without hardcoded prefix so routes can be accessed both at root
+# (/authorize, /oauth2callback, /emails, /create-event/{message_id})
+# and with legacy /api/google prefix.
+router = APIRouter(tags=["Google Integration"])
 
 
-@router.get("/status")
+def get_redirect_uri(request: Request) -> str:
+    """
+    Dynamically computes or retrieves the OAuth 2.0 redirect URI.
+    Defaults to {base_url}oauth2callback, or respects GOOGLE_REDIRECT_URI.
+    """
+    configured = os.getenv("GOOGLE_REDIRECT_URI")
+    if configured:
+        return configured
+    # Compute from request host / scheme
+    base_url = str(request.base_url).rstrip("/")
+    return f"{base_url}/oauth2callback"
+
+
+# =========================================================================
+# Route: /authorize (and /api/google/authorize / /api/google/auth)
+# =========================================================================
+@router.get("/authorize", summary="Redirect to Google OAuth 2.0 consent screen")
+@router.get("/api/google/authorize", summary="Alias for /authorize")
+@router.get("/api/google/auth", summary="Legacy alias for /authorize")
+def authorize_google(
+    request: Request,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
+    """
+    Initiates Google OAuth 2.0 authorization.
+    Requests scopes for Gmail (readonly) and Google Calendar (events).
+    Forces access_type='offline' and prompt='consent' so a refresh token is issued.
+    """
+    redirect_uri = get_redirect_uri(request)
+
+    try:
+        flow = create_oauth_flow(redirect_uri=redirect_uri)
+    except FileNotFoundError:
+        # If client_secret.json is not placed yet, render the helpful setup guide
+        return templates.TemplateResponse(
+            request=request,
+            name="setup_guide.html",
+            context={"redirect_uri": redirect_uri},
+            status_code=status.HTTP_200_OK
+        )
+
+    # State stores the current authenticated user's ID for safety during callback
+    state = str(current_user.id)
+
+    authorization_url, state = flow.authorization_url(
+        access_type="offline",
+        prompt="consent",
+        include_granted_scopes="true",
+        state=state
+    )
+
+    return RedirectResponse(url=authorization_url)
+
+
+# =========================================================================
+# Route: /oauth2callback (and /api/google/callback)
+# =========================================================================
+@router.get("/oauth2callback", summary="Google OAuth 2.0 callback endpoint")
+@router.get("/api/google/callback", summary="Alias for /oauth2callback")
+def oauth2callback(
+    request: Request,
+    code: Optional[str] = None,
+    state: Optional[str] = None,
+    error: Optional[str] = None,
+    db: Session = Depends(get_db),
+    current_user: Optional[models.User] = Depends(get_optional_current_user)
+):
+    """
+    Exchanges the authorization code for tokens and persists them into the database
+    linked directly to the authenticated user.
+    """
+    if error:
+        logger.error(f"Google OAuth error returned: {error}")
+        frontend_url = os.getenv("FRONTEND_URL", "http://localhost:5173")
+        return RedirectResponse(url=f"{frontend_url}/upload?google_error={error}")
+
+    if not code:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Missing OAuth authorization code in callback."
+        )
+
+    # Identify user from current session or the secure state parameter
+    user_id = None
+    if current_user:
+        user_id = current_user.id
+    elif state and state.isdigit():
+        user_id = int(state)
+
+    if not user_id:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Cannot identify user for Google OAuth callback. Please log in first."
+        )
+
+    redirect_uri = get_redirect_uri(request)
+    flow = create_oauth_flow(redirect_uri=redirect_uri)
+
+    try:
+        flow.fetch_token(code=code)
+        credentials = flow.credentials
+        save_user_credentials(user_id=user_id, credentials=credentials, db=db)
+        logger.info(f"Google OAuth credentials successfully stored for user {user_id}")
+    except Exception as exc:
+        logger.error(f"Failed to exchange token in oauth2callback: {exc}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to exchange Google authorization code for tokens: {str(exc)}"
+        )
+
+    # If browser initiated OAuth directly, redirect to /emails list
+    accept_header = request.headers.get("accept", "")
+    if "text/html" in accept_header or not accept_header:
+        return RedirectResponse(url="/emails", status_code=status.HTTP_303_SEE_OTHER)
+
+    frontend_url = os.getenv("FRONTEND_URL", "http://localhost:5173")
+    return RedirectResponse(url=f"{frontend_url}/upload?google_connected=true")
+
+
+# =========================================================================
+# Route: /emails (and /api/google/emails)
+# =========================================================================
+@router.get("/emails", summary="List recent Gmail messages with Create Event actions")
+@router.get("/api/google/emails", summary="Alias for /emails")
+def list_emails(
+    request: Request,
+    max_results: int = Query(15, ge=1, le=50),
+    format: Optional[str] = Query(None),
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
+    """
+    Retrieves recent Gmail messages (subject, sender, snippet, date).
+    Uses the auto-refreshed Google credentials from database.
+    Renders an HTML view or returns JSON based on Accept header or format query parameter.
+    """
+    creds = get_google_credentials(user_id=current_user.id, db=db)
+    is_connected = bool(creds and creds.token)
+
+    emails: List[Dict[str, Any]] = []
+    error_msg = None
+
+    if is_connected:
+        try:
+            emails = fetch_recent_emails(creds=creds, max_results=max_results)
+        except Exception as exc:
+            logger.error(f"Error fetching Gmail messages for user {current_user.id}: {exc}")
+            error_msg = str(exc)
+
+    # Return JSON if explicitly requested
+    accept_header = request.headers.get("accept", "")
+    if format == "json" or "application/json" in accept_header and "text/html" not in accept_header:
+        return {
+            "connected": is_connected,
+            "email": current_user.email,
+            "count": len(emails),
+            "emails": emails,
+            "error": error_msg
+        }
+
+    # Render HTML view
+    return templates.TemplateResponse(
+        request=request,
+        name="emails.html",
+        context={
+            "is_connected": is_connected,
+            "user_email": current_user.email,
+            "emails": emails,
+            "error_msg": error_msg
+        }
+    )
+
+
+# =========================================================================
+# Route: /create-event/{message_id} (POST) (and /api/google/create-event/{message_id})
+# =========================================================================
+@router.post("/create-event/{message_id}", summary="Create Google Calendar event from Gmail message")
+@router.post("/api/google/create-event/{message_id}", summary="Alias for /create-event/{message_id}")
+def create_event_from_email_route(
+    message_id: str,
+    request: Request,
+    format: Optional[str] = Query(None),
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
+    """
+    Fetches the full email by message_id, extracts subject + body snippet,
+    detects date/time in the email body (defaulting to starting now for 1 hour if not found),
+    and creates an event on the user's primary Google Calendar via events.insert.
+    Returns or renders a success view with a link to the created event.
+    """
+    creds = get_google_credentials(user_id=current_user.id, db=db)
+    if not creds:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Google account not connected or expired. Please authenticate via /authorize first."
+        )
+
+    try:
+        event_result = create_calendar_event_from_email(creds=creds, message_id=message_id)
+    except Exception as exc:
+        logger.error(f"Failed to create Google Calendar event from email {message_id}: {exc}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to create Google Calendar event: {str(exc)}"
+        )
+
+    # Return JSON if requested
+    accept_header = request.headers.get("accept", "")
+    if format == "json" or "application/json" in accept_header and "text/html" not in accept_header:
+        return {
+            "success": True,
+            "message": "Event created on Google Calendar",
+            "event": event_result
+        }
+
+    # Render HTML success view
+    return templates.TemplateResponse(
+        request=request,
+        name="event_success.html",
+        context={"event": event_result}
+    )
+
+
+# =========================================================================
+# Additional / Legacy Google Endpoints (preserves frontend compatibility)
+# =========================================================================
+@router.get("/api/google/status")
 def get_google_status(
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user)
 ):
+    """Returns the Google connection status of the current user."""
     token_rec = (
         db.query(models.UserGoogleToken)
         .filter(models.UserGoogleToken.user_id == current_user.id)
@@ -30,82 +281,19 @@ def get_google_status(
     }
 
 
-@router.get("/auth")
-def google_auth(
-    db: Session = Depends(get_db),
-    current_user: models.User = Depends(get_current_user)
-):
-    client_id = os.getenv("GOOGLE_CLIENT_ID", "")
-    redirect_uri = os.getenv("GOOGLE_REDIRECT_URI", "http://localhost:8000/api/google/callback")
-    frontend_url = os.getenv("FRONTEND_URL", "http://localhost:5173")
-
-    if not client_id:
-        # Development mode fallback: simulates successful connection for current user
-        token_rec = (
-            db.query(models.UserGoogleToken)
-            .filter(models.UserGoogleToken.user_id == current_user.id)
-            .first()
-        )
-        if not token_rec:
-            token_rec = models.UserGoogleToken(user_id=current_user.id)
-            db.add(token_rec)
-        token_rec.access_token = "mock-google-calendar-access-token"
-        token_rec.scopes = "https://www.googleapis.com/auth/calendar.events.readonly"
-        token_rec.updated_at = datetime.now(timezone.utc)
-        db.commit()
-
-        return RedirectResponse(url=f"{frontend_url}/upload?google_connected=true")
-
-    scope = "https://www.googleapis.com/auth/calendar.events.readonly https://www.googleapis.com/auth/userinfo.email"
-    state = str(current_user.id)
-    auth_url = (
-        f"https://accounts.google.com/o/oauth2/v2/auth?"
-        f"client_id={client_id}&redirect_uri={redirect_uri}&response_type=code&"
-        f"scope={scope}&access_type=offline&prompt=consent&state={state}"
-    )
-    return RedirectResponse(url=auth_url)
-
-
-@router.get("/callback")
-def google_callback(
-    code: Optional[str] = None,
-    state: Optional[str] = None,
-    error: Optional[str] = None,
-    db: Session = Depends(get_db),
-    current_user: Optional[models.User] = Depends(get_current_user)
-):
-    frontend_url = os.getenv("FRONTEND_URL", "http://localhost:5173")
-    if error:
-        return RedirectResponse(url=f"{frontend_url}/upload?google_error={error}")
-
-    user_id = current_user.id if current_user else (int(state) if state and state.isdigit() else None)
-    if user_id:
-        token_rec = (
-            db.query(models.UserGoogleToken)
-            .filter(models.UserGoogleToken.user_id == user_id)
-            .first()
-        )
-        if not token_rec:
-            token_rec = models.UserGoogleToken(user_id=user_id)
-            db.add(token_rec)
-        token_rec.access_token = "google-token-" + (code[:8] if code else "active")
-        token_rec.updated_at = datetime.now(timezone.utc)
-        db.commit()
-
-    return RedirectResponse(url=f"{frontend_url}/upload?google_connected=true")
-
-
+@router.post("/api/google/disconnect")
 @router.post("/disconnect")
 def google_disconnect(
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user)
 ):
+    """Disconnects Google account and clears stored tokens."""
     db.query(models.UserGoogleToken).filter(models.UserGoogleToken.user_id == current_user.id).delete()
     db.commit()
-    return {"success": True, "message": "Google Calendar disconnected successfully"}
+    return {"success": True, "message": "Google account disconnected successfully"}
 
 
-@router.post("/sync/import")
+@router.post("/api/google/sync/import")
 def google_sync_import(
     commit: bool = Query(False),
     timeMin: Optional[str] = Query(None),
@@ -113,6 +301,7 @@ def google_sync_import(
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user)
 ):
+    """Syncs external Google Calendar events into LifeSync task schedule."""
     token_rec = (
         db.query(models.UserGoogleToken)
         .filter(models.UserGoogleToken.user_id == current_user.id)
@@ -144,17 +333,6 @@ def google_sync_import(
             "category": "Google Calendar",
             "urgency": "high",
             "googleEventId": "gevt_office_hours_002"
-        },
-        {
-            "task": "Weekly Lab Retrospective",
-            "scheduledSlot": f"{(now + timedelta(days=2)).strftime('%Y-%m-%d')} 15:00 - 16:30",
-            "scheduled_date": (now + timedelta(days=2)).strftime('%Y-%m-%d'),
-            "start_time": "15:00",
-            "end_time": "16:30",
-            "deadline": f"{(now + timedelta(days=2)).strftime('%Y-%m-%d')} 16:30",
-            "category": "Google Calendar",
-            "urgency": "low",
-            "googleEventId": "gevt_lab_retro_003"
         }
     ]
 
@@ -189,7 +367,6 @@ def google_sync_import(
                 task_obj = new_t
                 imported += 1
 
-            # Ensure ScheduledSlot exists for the task
             existing_slot = (
                 db.query(models.ScheduledSlot)
                 .filter(

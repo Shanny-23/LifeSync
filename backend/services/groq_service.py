@@ -155,14 +155,30 @@ def call_groq_chat(
         except RateLimitError as rle:
             attempt += 1
             if attempt <= max_retries:
-                wait_seconds = 2.5
+                wait_seconds = 1.0
                 logger.warning(
-                    "Groq API 429 Rate Limit encountered. Waiting %s seconds before retry (%d/%d)...",
-                    wait_seconds, attempt, max_retries
+                    "Groq API 429 Rate Limit encountered for '%s'. Waiting %s seconds before retry (%d/%d)...",
+                    model, wait_seconds, attempt, max_retries
                 )
                 time.sleep(wait_seconds)
             else:
-                logger.error("Groq API 429 Rate Limit exceeded after retries: %s", rle)
+                logger.warning("Groq API 429 Rate Limit exceeded for '%s'. Attempting backup models...", model)
+                backup_models = ["qwen/qwen3.8-27b", "openai/gpt-oss-20b"]
+                for backup_model in backup_models:
+                    if backup_model != model:
+                        try:
+                            logger.info("Failing over to backup Groq model: %s", backup_model)
+                            return call_groq_chat(
+                                prompt=prompt,
+                                model=backup_model,
+                                temperature=temperature,
+                                system_prompt=system_prompt,
+                                custom_key=custom_key,
+                                max_retries=0
+                            )
+                        except Exception as backup_err:
+                            logger.warning("Backup model %s failed: %s", backup_model, backup_err)
+                logger.error("All Groq models rate-limited or failed: %s", rle)
                 raise
         except Exception as exc:
             err_str = str(exc).lower()

@@ -1,5 +1,6 @@
 from datetime import datetime, date, time, timedelta, timezone
 from typing import Optional, Any
+import re
 import dateutil.parser
 from sqlalchemy.orm import Session
 
@@ -19,13 +20,16 @@ WEEKDAYS = {
 def parse_flexible_datetime(dt_str: Optional[str]) -> Optional[datetime]:
     """
     Parses arbitrary date/datetime strings (ISO, US, human-readable) into a datetime object.
+    Uses dayfirst=False for ISO formats (YYYY-MM-DD), and dayfirst=True for DD.MM.YYYY.
     Returns None if parsing is impossible.
     """
     if not dt_str or not str(dt_str).strip():
         return None
     cleaned = str(dt_str).strip()
     try:
-        return dateutil.parser.parse(cleaned, fuzzy=True)
+        if re.match(r'^\d{4}[-/]\d{1,2}[-/]\d{1,2}', cleaned):
+            return dateutil.parser.parse(cleaned, fuzzy=True, dayfirst=False)
+        return dateutil.parser.parse(cleaned, fuzzy=True, dayfirst=True)
     except Exception:
         return None
 
@@ -91,10 +95,30 @@ def normalize_upload_data(upload_id: int, db: Session) -> dict[str, Any]:
     tasks_updated = 0
     total_items = 0
 
+    # Pre-parse raw document text for academic calendar items and dates if available
+    calendar_lookup = []
+    if upload.raw_text:
+        try:
+            from services.parser import parse_academic_calendar_text
+            calendar_lookup = parse_academic_calendar_text(upload.raw_text)
+        except Exception:
+            calendar_lookup = []
+
     for ext_rec in extracted_records:
         items = ext_rec.data
-        if not isinstance(items, list):
-            items = [items] if isinstance(items, dict) else []
+        if isinstance(items, dict):
+            for key in ["schedule", "events", "tasks", "items", "assignments", "modules", "topics", "exams", "holidays"]:
+                if key in items and isinstance(items[key], list):
+                    items = items[key]
+                    break
+            else:
+                list_vals = [v for v in items.values() if isinstance(v, list)]
+                if list_vals:
+                    items = list_vals[0]
+                else:
+                    items = [items]
+        elif not isinstance(items, list):
+            items = []
 
         upload_type = ext_rec.type or upload.type
 
@@ -105,26 +129,116 @@ def normalize_upload_data(upload_id: int, db: Session) -> dict[str, Any]:
             total_items += 1
 
             # -------------------------------------------------------------
-            # Category 1: Timetable -> Events (class_session)
+            # Category 1: Timetable -> Events (class_session / holiday / exam / academic_event)
             # -------------------------------------------------------------
             if upload_type == "timetable":
-                subject = item.get("subject", "General")
-                day = item.get("day", "Monday")
-                start_time = item.get("start_time", "09:00")
-                end_time = item.get("end_time", "10:30")
+                subject = str(item.get("subject", "General")).strip()
+                day = str(item.get("day", "Monday")).strip()
+                start_time = str(item.get("start_time", "") or "").strip()
+                end_time = str(item.get("end_time", "") or "").strip()
                 location = item.get("location")
+                explicit_date = item.get("date") or item.get("start_date")
+                explicit_end_date = item.get("end_date")
+                explicit_type = item.get("type")
 
-                start_dt = parse_timetable_datetime(day, start_time)
-                end_dt = parse_timetable_datetime(day, end_time)
-                title = f"{subject} Class"
+                # If date is not directly on item, check if subject matches any pre-parsed calendar item
+                matched_cal = None
+                if not explicit_date and calendar_lookup:
+                    sub_clean = re.sub(r'[^a-zA-Z0-9]', '', subject).lower()
+                    for cal in calendar_lookup:
+                        cal_sub_clean = re.sub(r'[^a-zA-Z0-9]', '', cal["subject"]).lower()
+                        if sub_clean and cal_sub_clean and (sub_clean in cal_sub_clean or cal_sub_clean in sub_clean):
+                            matched_cal = cal
+                            break
 
-                # Natural key dedupe: (title, start_datetime, subject)
+                if matched_cal:
+                    explicit_date = matched_cal.get("date")
+                    explicit_end_date = matched_cal.get("end_date")
+                    if not explicit_type:
+                        explicit_type = matched_cal.get("type")
+                    if not start_time:
+                        start_time = matched_cal.get("start_time", "09:00")
+                    if not end_time:
+                        end_time = matched_cal.get("end_time", "17:00")
+
+                # If explicit date is found (e.g. from academic calendar circular)
+                if explicit_date:
+                    start_dt = parse_flexible_datetime(explicit_date)
+                    if start_dt:
+                        # Apply start time
+                        s_time = time(9, 0)
+                        if start_time:
+                            try:
+                                s_time = dateutil.parser.parse(start_time, fuzzy=True).time()
+                            except Exception:
+                                pass
+                        start_dt = datetime.combine(start_dt.date(), s_time)
+
+                        # Determine end_dt
+                        if explicit_end_date:
+                            end_dt_raw = parse_flexible_datetime(explicit_end_date)
+                            end_date_val = end_dt_raw.date() if end_dt_raw else start_dt.date()
+                        else:
+                            end_date_val = start_dt.date()
+
+                        e_time = time(17, 0)
+                        if end_time:
+                            try:
+                                e_time = dateutil.parser.parse(end_time, fuzzy=True).time()
+                            except Exception:
+                                pass
+                        end_dt = datetime.combine(end_date_val, e_time)
+
+                        # Clean title (remove trailing ' Class' if present and sanitize OCR glitches)
+                        clean_title = re.sub(r'\s+Class$', '', subject, flags=re.I).strip()
+                        clean_title = clean_title.replace('\ufffd25', "'25").replace('\ufffd', '-').replace('\u2019', "'").strip()
+                        clean_title = re.sub(r'Gravitas[^\w\s]*25', "Gravitas'25", clean_title)
+                        clean_title = re.sub(r'Continuous Assessment Test.*?II', "Continuous Assessment Test - II", clean_title)
+                        clean_title = re.sub(r'[\ufffd\x96\x97]', '-', clean_title)
+
+                        # Determine event type
+                        if explicit_type in {"holiday", "exam", "academic_event", "class_session"}:
+                            ev_type = explicit_type
+                        else:
+                            t_low = clean_title.lower()
+                            if any(w in t_low for w in ['(holiday)', 'holiday', 'no instructional day', 'vacation', 'recess', 'break', 'puja', 'pooja', 'jayanthi', 'deepavali', 'diwali']):
+                                ev_type = 'holiday'
+                            elif re.search(r'\b(cat\b|fat\b|exam|test|midterm|quiz|assessment)\b', t_low):
+                                ev_type = 'exam'
+                            elif any(w in t_low for w in ['registration', 'commencement', 'withdraw', 'add/drop', 'fee', 'gravitas', 'fest']):
+                                ev_type = 'academic_event'
+                            else:
+                                ev_type = 'academic_event'
+
+                        # Meaningful description
+                        if ev_type == "holiday":
+                            desc = f"Observed Academic Holiday ({day})"
+                        elif ev_type == "exam":
+                            desc = f"Academic Assessment / Examination ({day})"
+                        else:
+                            desc = f"Academic Milestone / Event on {day}"
+
+                        title = clean_title
+                    else:
+                        start_dt = parse_timetable_datetime(day, start_time or "09:00")
+                        end_dt = parse_timetable_datetime(day, end_time or "10:30")
+                        title = f"{subject} Class" if not subject.endswith(" Class") else subject
+                        ev_type = "class_session"
+                        desc = f"Class session on {day} from {start_time} to {end_time}."
+                else:
+                    # Pure weekly recurring lecture slot
+                    start_dt = parse_timetable_datetime(day, start_time or "09:00")
+                    end_dt = parse_timetable_datetime(day, end_time or "10:30")
+                    title = f"{subject} Class" if not subject.endswith(" Class") else subject
+                    ev_type = "class_session"
+                    desc = f"Class session on {day} from {start_time} to {end_time}."
+
+                # Natural key dedupe: (title, start_datetime)
                 existing_event_query = (
                     db.query(models.Event)
                     .filter(
                         models.Event.title == title,
-                        models.Event.start_datetime == start_dt,
-                        models.Event.subject == subject
+                        models.Event.start_datetime == start_dt
                     )
                 )
                 if upload.user_id is not None:
@@ -133,7 +247,9 @@ def normalize_upload_data(upload_id: int, db: Session) -> dict[str, Any]:
 
                 if existing_event:
                     existing_event.end_datetime = end_dt
+                    existing_event.type = ev_type
                     existing_event.location = location
+                    existing_event.description = desc
                     existing_event.source_upload_id = upload_id
                     existing_event.status = "scheduled"
                     events_updated += 1
@@ -142,12 +258,12 @@ def normalize_upload_data(upload_id: int, db: Session) -> dict[str, Any]:
                         user_id=upload.user_id,
                         source_upload_id=upload_id,
                         title=title,
-                        type="class_session",
+                        type=ev_type,
                         start_datetime=start_dt,
                         end_datetime=end_dt,
                         subject=subject,
                         location=location,
-                        description=f"Class session on {day} from {start_time} to {end_time}.",
+                        description=desc,
                         status="scheduled"
                     )
                     db.add(new_event)

@@ -32,6 +32,9 @@ class UserGoogleToken(Base):
     tokens_json = Column(Text, nullable=True, default="{}")
     access_token = Column(String(500), nullable=True)
     refresh_token = Column(String(500), nullable=True)
+    token_uri = Column(String(255), nullable=True)
+    client_id = Column(String(255), nullable=True)
+    client_secret = Column(String(255), nullable=True)
     scopes = Column(String(500), nullable=True)
     expiry = Column(DateTime, nullable=True)
     updated_at = Column(

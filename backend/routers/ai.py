@@ -4,6 +4,7 @@ from pydantic import BaseModel
 from typing import Optional, List, Dict, Any
 from datetime import datetime, timezone, time, timedelta
 import logging
+import dateutil.parser
 
 logger = logging.getLogger(__name__)
 
@@ -44,6 +45,7 @@ class CommitExtractedRequest(BaseModel):
     exams: List[Dict[str, Any]] = []
     events: List[Dict[str, Any]] = []
     holidays: List[Dict[str, Any]] = []
+    sync_to_google_calendar: Optional[bool] = False
 
 @router.get("/status")
 async def get_ai_status(
@@ -243,9 +245,12 @@ async def commit_extracted_items(
         exam_dt = None
         if exam.get("date"):
             try:
-                exam_dt = datetime.fromisoformat(exam["date"])
+                exam_dt = dateutil.parser.parse(str(exam["date"]), dayfirst=True)
             except Exception:
-                pass
+                try:
+                    exam_dt = datetime.fromisoformat(str(exam["date"]).replace("Z", ""))
+                except Exception:
+                    pass
 
         task = Task(
             user_id=current_user.id,
@@ -282,17 +287,63 @@ async def commit_extracted_items(
     monday_current_week = now.date() - timedelta(days=now.weekday())
 
     for ev in payload.events:
-        # Case A: Direct ISO timestamps
+        # Case A: Explicit date (or start_date) provided on the event
+        concrete_date_str = ev.get("date") or ev.get("start_date")
+        if concrete_date_str:
+            try:
+                base_dt = dateutil.parser.parse(str(concrete_date_str), dayfirst=True)
+                base_d = base_dt.date()
+
+                st_time = time(9, 0)
+                if ev.get("start_time"):
+                    try:
+                        st_time = dateutil.parser.parse(str(ev["start_time"]), fuzzy=True).time()
+                    except Exception:
+                        pass
+                elif base_dt.hour != 0 or base_dt.minute != 0:
+                    st_time = base_dt.time()
+
+                et_time = time(17, 0)
+                if ev.get("end_time"):
+                    try:
+                        et_time = dateutil.parser.parse(str(ev["end_time"]), fuzzy=True).time()
+                    except Exception:
+                        pass
+
+                end_base_d = base_d
+                if ev.get("end_date"):
+                    try:
+                        end_base_d = dateutil.parser.parse(str(ev["end_date"]), dayfirst=True).date()
+                    except Exception:
+                        pass
+
+                event = Event(
+                    user_id=current_user.id,
+                    title=ev.get("title") or ev.get("subject", "Academic Event"),
+                    type=ev.get("type", "academic_event"),
+                    start_datetime=datetime.combine(base_d, st_time),
+                    end_datetime=datetime.combine(end_base_d, et_time),
+                    subject=ev.get("subject"),
+                    location=ev.get("location", ""),
+                    description=ev.get("description", "")
+                )
+                db.add(event)
+                created_events.append(event)
+                continue
+            except Exception as ev_dt_err:
+                logger.warning("Error parsing concrete date event %s: %s", ev, ev_dt_err)
+
+        # Case B: Direct ISO timestamps
         start_dt = None
         if ev.get("start_datetime"):
             try:
-                start_dt = datetime.fromisoformat(ev["start_datetime"])
+                start_dt = dateutil.parser.parse(str(ev["start_datetime"]), dayfirst=True)
             except Exception:
                 pass
         end_dt = None
         if ev.get("end_datetime"):
             try:
-                end_dt = datetime.fromisoformat(ev["end_datetime"])
+                end_dt = dateutil.parser.parse(str(ev["end_datetime"]), dayfirst=True)
             except Exception:
                 pass
 
@@ -311,7 +362,7 @@ async def commit_extracted_items(
             created_events.append(event)
             continue
 
-        # Case B: Timetable slot with day & times (e.g. day="Monday", start_time="10:00", end_time="11:30")
+        # Case C: Timetable slot with day & times (only for recurring lecture slots with no concrete date)
         day_val = str(ev.get("day", "")).strip().lower()
         start_time_val = ev.get("start_time")
         end_time_val = ev.get("end_time")
@@ -354,24 +405,23 @@ async def commit_extracted_items(
 
         if date_str:
             try:
-                start_dt = datetime.fromisoformat(str(date_str).replace("Z", ""))
+                start_dt = dateutil.parser.parse(str(date_str), dayfirst=True)
                 if start_dt.hour == 0 and start_dt.minute == 0:
                     start_dt = datetime.combine(start_dt.date(), time(0, 0, 0))
             except Exception:
                 try:
-                    start_dt = datetime.strptime(str(date_str)[:10], "%Y-%m-%d")
+                    start_dt = datetime.fromisoformat(str(date_str).replace("Z", ""))
                 except Exception:
                     pass
 
         if end_date_str:
             try:
-                end_dt = datetime.fromisoformat(str(end_date_str).replace("Z", ""))
+                end_dt = dateutil.parser.parse(str(end_date_str), dayfirst=True)
                 if end_dt.hour == 0 and end_dt.minute == 0:
                     end_dt = datetime.combine(end_dt.date(), time(23, 59, 59))
             except Exception:
                 try:
-                    d = datetime.strptime(str(end_date_str)[:10], "%Y-%m-%d")
-                    end_dt = datetime.combine(d.date(), time(23, 59, 59))
+                    end_dt = datetime.fromisoformat(str(end_date_str).replace("Z", ""))
                 except Exception:
                     pass
 
@@ -401,9 +451,40 @@ async def commit_extracted_items(
     except Exception as sched_err:
         logger.warning("Auto-scheduling after commit: %s", sched_err)
 
+    # Optional Google Calendar Ingestion / Sync
+    google_sync_result = None
+    if getattr(payload, "sync_to_google_calendar", False):
+        try:
+            from services.google_service import get_google_credentials, bulk_sync_to_google_calendar
+            creds = get_google_credentials(user_id=current_user.id, db=db)
+            if creds:
+                google_sync_result = bulk_sync_to_google_calendar(
+                    creds=creds,
+                    events=created_events,
+                    tasks=created_tasks
+                )
+            else:
+                google_sync_result = {
+                    "success": False,
+                    "not_connected": True,
+                    "message": "Google account not connected yet. Please authenticate via /authorize to enable direct sync."
+                }
+        except Exception as g_err:
+            logger.error("Failed to sync committed items to Google Calendar: %s", g_err)
+            google_sync_result = {"success": False, "error": str(g_err)}
+
+    message = f"Successfully integrated {len(created_tasks)} tasks and {len(created_events)} calendar event(s) into your schedule."
+    if google_sync_result:
+        if google_sync_result.get("success"):
+            synced_n = google_sync_result.get("synced_count", 0)
+            message += f" 📅 Synced {synced_n} item(s) directly into your Google Calendar!"
+        elif google_sync_result.get("not_connected"):
+            message += " (Connect Google Calendar via /authorize to sync to Google Calendar next time)."
+
     return {
         "status": "success",
         "committed_tasks": len(created_tasks),
         "committed_events": len(created_events),
-        "message": f"Successfully integrated {len(created_tasks)} tasks and {len(created_events)} calendar event(s) into your schedule."
+        "google_sync": google_sync_result,
+        "message": message
     }

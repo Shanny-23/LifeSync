@@ -217,6 +217,71 @@ Return ONLY the parseable JSON object:"""
 
     # Deterministic Heuristic Fallback with Full Intelligence Breakdown
     now = datetime.now(timezone.utc)
+
+    # Check if raw_text is an academic circular or calendar with specific dates
+    try:
+        from services.parser import parse_academic_calendar_text
+        parsed_cal_items = parse_academic_calendar_text(raw_text)
+    except Exception:
+        parsed_cal_items = []
+
+    if parsed_cal_items:
+        cal_holidays = []
+        cal_exams = []
+        cal_schedule = []
+        for it in parsed_cal_items:
+            if it["type"] == "holiday":
+                cal_holidays.append({
+                    "name": it["subject"],
+                    "start_date": it["date"],
+                    "end_date": it.get("end_date") or it["date"],
+                    "type": "holiday",
+                    "description": f"Observed university holiday ({it['day']})"
+                })
+            elif it["type"] == "exam":
+                cal_exams.append({
+                    "title": it["subject"],
+                    "subject": "Academic",
+                    "date": f"{it['date']}T09:00:00",
+                    "weightage": "30%",
+                    "preparation_days_needed": 4,
+                    "description": f"Examination / Assessment ({it['day']})"
+                })
+            else:
+                cal_schedule.append({
+                    "day": it["day"],
+                    "start_time": it.get("start_time", "09:00"),
+                    "end_time": it.get("end_time", "17:00"),
+                    "title": it["subject"],
+                    "location": None,
+                    "date": it["date"],
+                    "end_date": it.get("end_date")
+                })
+
+        return {
+            "source": "heuristic_calendar",
+            "course_info": {
+                "course_code": "ACAD",
+                "course_title": "Fall Semester Academic Calendar",
+                "instructor": None,
+                "term": "Fall Semester",
+                "document_type": "circular"
+            },
+            "grading_breakdown": [],
+            "workload_analysis": {
+                "estimated_weekly_hours": 4.0,
+                "intensity_level": "Moderate",
+                "crunch_periods": ["Continuous Assessment Tests", "Final Assessment Tests"],
+                "workload_summary": "Extracted academic calendar and examination schedule."
+            },
+            "syllabus_roadmap": [],
+            "assignments": [],
+            "exams": cal_exams,
+            "schedule": cal_schedule,
+            "holidays": cal_holidays,
+            "recommendations": ["Review assessment deadlines and plan study blocks early."]
+        }
+
     course_code_match = re.search(r'\b([A-Z]{2,4}\s*[-]?\s*\d{3,4}[A-Z]?)\b', raw_text)
     course_code = course_code_match.group(1).replace(" ", "") if course_code_match else "CS101"
 
