@@ -6,6 +6,7 @@ import Dashboard from './pages/Dashboard';
 import Calendar from './pages/Calendar';
 import Tasks from './pages/Tasks';
 import Upload from './pages/Upload';
+import StreakDeepDive from './pages/StreakDeepDive';
 import { ToastProvider } from './context/ToastContext';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import AuthModal from './components/AuthModal';
@@ -55,6 +56,7 @@ function AppRoutes() {
         <Route path="/calendar" element={<Calendar />} />
         <Route path="/tasks" element={<Tasks />} />
         <Route path="/upload" element={<Upload />} />
+        <Route path="/streak-details" element={<StreakDeepDive />} />
         <Route path="*" element={<Navigate to="/dashboard" replace />} />
       </Route>
     </Routes>

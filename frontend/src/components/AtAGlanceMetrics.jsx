@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useToast } from '../context/ToastContext';
+import StreakBreakdownModal from './StreakBreakdownModal';
 
 export default function AtAGlanceMetrics({
   tasks = [],
@@ -13,6 +14,7 @@ export default function AtAGlanceMetrics({
   const toast = useToast();
   const [seconds, setSeconds] = useState(6138); // 01:42:18
   const [isRunning, setIsRunning] = useState(true);
+  const [isStreakModalOpen, setIsStreakModalOpen] = useState(false);
 
   useEffect(() => {
     let interval = null;
@@ -110,9 +112,9 @@ export default function AtAGlanceMetrics({
         {/* Metric 3: Study Streak - Clickable */}
         <div
           className="metric-card"
-          onClick={() => toast.info(`🔥 ${streakDays} Consecutive Days! You are in the top 5% of consistent researchers.`)}
+          onClick={() => setIsStreakModalOpen(true)}
           style={{ cursor: 'pointer', transition: 'all 0.2s ease' }}
-          title="Click to inspect study streak"
+          title="Click to inspect study streak breakdown"
         >
           <div className="metric-card-header">
             <span className="metric-label">Study Streak</span>
@@ -125,7 +127,13 @@ export default function AtAGlanceMetrics({
           <div style={{ fontSize: '0.70rem', color: '#6B7280' }}>
             Logged: 2h 45m today
           </div>
-          <div style={{ fontSize: '0.68rem', color: '#B45309', marginTop: '6px', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '4px' }}>
+          <div
+            style={{ fontSize: '0.68rem', color: '#B45309', marginTop: '6px', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '4px' }}
+            onClick={(e) => {
+              e.stopPropagation();
+              setIsStreakModalOpen(true);
+            }}
+          >
             <span>Streak Details</span> <span>⚡</span>
           </div>
         </div>
@@ -179,6 +187,12 @@ export default function AtAGlanceMetrics({
           )}
         </div>
       </div>
+
+      {/* Study & Habit Streak Breakdown Modal */}
+      <StreakBreakdownModal
+        isOpen={isStreakModalOpen}
+        onClose={() => setIsStreakModalOpen(false)}
+      />
     </div>
   );
 }
